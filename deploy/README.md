@@ -4,8 +4,8 @@
 
 ```powershell
 cd C:\Fontes\Extracao222
-docker build -t REGISTRY/PROJETO/ecargo-analytics:latest .
-docker push REGISTRY/PROJETO/ecargo-analytics:latest
+docker build -t REGISTRY/PROJETO/ecargo-analytics:VERSAO .
+docker push REGISTRY/PROJETO/ecargo-analytics:VERSAO
 ```
 
 Substitua `REGISTRY/PROJETO` pelo registry usado pelo cluster Rancher.
@@ -14,7 +14,7 @@ Substitua `REGISTRY/PROJETO` pelo registry usado pelo cluster Rancher.
 
 No arquivo `deploy/ecargo-analytics.yaml`:
 
-- troque `REGISTRY/PROJETO/ecargo-analytics:latest` pela imagem publicada;
+- use uma tag imutável da imagem publicada, por exemplo o SHA do commit. O cluster bloqueia `latest`;
 - troque o host `ecargo-analytics.loginlogistica.com.br` pelo DNS desejado;
 - cadastre `ECARGO_222_USER` e `ECARGO_222_PASSWORD` como Secret no Rancher.
 

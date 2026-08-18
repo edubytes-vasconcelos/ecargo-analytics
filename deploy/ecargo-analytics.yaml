@@ -32,7 +32,7 @@ spec:
     spec:
       containers:
         - name: ecargo-analytics
-          image: REGISTRY/PROJETO/ecargo-analytics:latest
+          image: ghcr.io/edubytes-vasconcelos/ecargo-analytics:14c3842e06be433816e31f6d7d0a113fbea1aa55
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8765
