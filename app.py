@@ -22,6 +22,7 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parent
 STATIC = ROOT / "static"
+BASE_PATH = "/" + os.environ.get("BASE_PATH", "").strip("/") if os.environ.get("BASE_PATH", "").strip("/") else ""
 UPLOADS = ROOT / "work" / "uploads"
 UPLOADS.mkdir(parents=True, exist_ok=True)
 LEGACY_REPO = ROOT / "chamados222pendencias.exe-master" / "chamados222pendencias.exe-master"
@@ -554,6 +555,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(404)
             return
         body = path.read_bytes()
+        if path.suffix == ".html":
+            body = body.replace(b"__BASE_PATH__", BASE_PATH.encode("utf-8"))
         self.send_response(200)
         self.send_header("Content-Type", content_types.get(path.suffix, "application/octet-stream"))
         self.send_header("Content-Length", str(len(body)))
@@ -561,7 +564,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self) -> None:
-        path = urlparse(self.path).path
+        path = self._route_path()
         if path == "/api/fetch-222":
             params = parse_qs(urlparse(self.path).query)
             hours = int(params.get("hours", ["24"])[0] or "24")
@@ -589,7 +592,7 @@ class Handler(BaseHTTPRequestHandler):
         self._send_file(target)
 
     def do_POST(self) -> None:
-        if urlparse(self.path).path != "/api/analyze":
+        if self._route_path() != "/api/analyze":
             self.send_error(404)
             return
 
@@ -612,6 +615,14 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(analyze(target))
         except Exception as exc:
             self._send_json({"error": f"Não consegui processar o arquivo: {exc}"}, 500)
+
+    def _route_path(self) -> str:
+        path = urlparse(self.path).path
+        if BASE_PATH and path == BASE_PATH:
+            return "/"
+        if BASE_PATH and path.startswith(f"{BASE_PATH}/"):
+            return path[len(BASE_PATH) :]
+        return path
 
 
 def main() -> None:

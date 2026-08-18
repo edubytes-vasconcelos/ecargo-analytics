@@ -2,6 +2,7 @@ let records = [];
 let options = {};
 const tableState = {};
 const tableModels = {};
+const appBasePath = document.documentElement.dataset.basePath || "";
 
 const monthNames = [
   "Janeiro",
@@ -37,7 +38,7 @@ async function uploadFile(event) {
   const form = new FormData();
   form.append("file", file);
 
-  const response = await fetch("/api/analyze", { method: "POST", body: form });
+  const response = await fetch(`${appBasePath}/api/analyze`, { method: "POST", body: form });
   const payload = await response.json();
   if (!response.ok) {
     setStatus(payload.error || "Falha ao processar arquivo.");
@@ -81,7 +82,7 @@ async function fetch222Payload(start, end) {
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
       const params = new URLSearchParams({ start, end, scope: "ecargo" });
-      const response = await fetch(`/api/fetch-222?${params.toString()}`);
+      const response = await fetch(`${appBasePath}/api/fetch-222?${params.toString()}`);
       const text = await response.text();
       let payload = {};
       try {

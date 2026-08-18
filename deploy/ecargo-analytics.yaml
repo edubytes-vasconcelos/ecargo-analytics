@@ -41,6 +41,8 @@ spec:
               value: "0.0.0.0"
             - name: PORT
               value: "8765"
+            - name: BASE_PATH
+              value: "/ecargo-analytics"
             - name: ECARGO_222_USER
               valueFrom:
                 secretKeyRef:
@@ -91,10 +93,10 @@ metadata:
   namespace: ecargo-analytics
 spec:
   rules:
-    - host: ecargo-analytics.loginlogistica.com.br
+    - host: ecargohml.k8s.loginlogistica.com.br
       http:
         paths:
-          - path: /
+          - path: /ecargo-analytics
             pathType: Prefix
             backend:
               service:
