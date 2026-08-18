@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>E-Cargo Analytics</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="topbar">
+        <div>
+          <h1>E-Cargo Analytics</h1>
+          <p>Busque os chamados direto do 222 ou use um relatório .xlsx como fallback.</p>
+        </div>
+        <div class="actions">
+          <label class="date-field">
+            <span>De</span>
+            <input id="startDateInput" type="date" />
+          </label>
+          <label class="date-field">
+            <span>Até</span>
+            <input id="endDateInput" type="date" />
+          </label>
+          <button id="fetch222" type="button">Buscar do 222</button>
+          <label class="upload">
+            <input id="fileInput" type="file" accept=".xlsx" />
+            <span>Selecionar Excel</span>
+          </label>
+        </div>
+      </section>
+
+      <section id="status" class="status">Nenhum arquivo carregado.</section>
+
+      <section class="filters">
+        <div class="filter-head">
+          <h2>Filtros</h2>
+          <button id="clearFilters" type="button">Limpar</button>
+          <button id="downloadCsv" type="button">Baixar CSV</button>
+        </div>
+        <div class="filter-grid">
+          <div class="filter-card">
+            <div class="filter-title">
+              <span>Categoria</span>
+              <select id="categoryMode">
+                <option value="include">Incluir marcadas</option>
+                <option value="exclude">Excluir marcadas</option>
+              </select>
+            </div>
+            <div id="categoryList" class="check-list"></div>
+          </div>
+          <div class="filter-card">
+            <div class="filter-title"><span>Subcategoria</span></div>
+            <div id="subcategoryList" class="check-list"></div>
+          </div>
+          <div class="filter-card compact">
+            <div class="filter-title"><span>Ano</span></div>
+            <div id="yearList" class="check-list"></div>
+          </div>
+          <div class="filter-card compact">
+            <div class="filter-title"><span>Mês</span></div>
+            <div id="monthList" class="check-list"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="kpis">
+        <article class="current-week-card"><span id="currentWeekLabel">Semana atual</span><strong id="kpiWeekOpened">0</strong><em id="kpiWeekOpenedDelta">entraram nesta semana</em></article>
+        <article><span>Finalizados na semana atual</span><strong id="kpiWeekClosed">0</strong><em id="kpiWeekClosedDelta">sem comparação</em></article>
+        <article><span>Saldo da semana atual</span><strong id="kpiWeekBalance">0</strong><em id="kpiWeekBalanceHint">entradas - finalizados</em></article>
+        <article><span>Backlog aberto</span><strong id="kpiOpen">0</strong><em id="kpiAging">0 acima de 15 dias</em></article>
+        <article><span>Mediana encerrados</span><strong id="kpiMedian">0h</strong><em id="kpiAvg">média 0h</em></article>
+      </section>
+
+      <section class="meeting-board">
+        <article class="focus-panel">
+          <div>
+            <h2>Leitura para reunião</h2>
+            <p id="meetingNarrative">Carregue uma base para gerar a leitura semanal.</p>
+          </div>
+          <div class="focus-stats">
+            <span><strong id="focusPeriod">-</strong> semana atual</span>
+            <span><strong id="focusClosureRate">0%</strong> taxa de fechamento</span>
+            <span><strong id="focusOldBacklog">0</strong> abertos acima de 30 dias</span>
+          </div>
+        </article>
+        <article>
+          <h2>Backlog por idade</h2>
+          <div class="table-wrap compact-table"><table id="agingTable"></table></div>
+        </article>
+      </section>
+
+      <section class="charts">
+        <article>
+          <h2>Tendência semanal</h2>
+          <div id="weeklyChart" class="chart-area"></div>
+        </article>
+        <article>
+          <h2>Categorias abertas</h2>
+          <div id="categoryChart" class="chart-area"></div>
+        </article>
+        <article>
+          <h2>Idade do backlog</h2>
+          <div id="agingChart" class="chart-area"></div>
+        </article>
+      </section>
+
+      <section id="detailPanel" class="detail-panel" hidden>
+        <div class="detail-head">
+          <div>
+            <h2 id="detailTitle">Detalhe dos chamados</h2>
+            <p id="detailMeta">Selecione uma linha de resumo para abrir os chamados.</p>
+          </div>
+          <button id="closeDetail" type="button">Fechar</button>
+        </div>
+        <div class="table-wrap detail-wrap"><table id="detailTable"></table></div>
+      </section>
+
+      <section class="tables">
+        <article>
+          <h2>Resumo semanal de produção</h2>
+          <div class="table-wrap"><table id="weeklyTable"></table></div>
+        </article>
+        <article>
+          <h2>Resumo mensal</h2>
+          <div class="table-wrap"><table id="monthlyTable"></table></div>
+        </article>
+        <article>
+          <h2>Categorias para atenção</h2>
+          <div class="table-wrap"><table id="categoryTable"></table></div>
+        </article>
+        <article>
+          <h2>Analistas responsáveis</h2>
+          <div class="table-wrap"><table id="analystTable"></table></div>
+        </article>
+        <article>
+          <h2>Ranking de grupos</h2>
+          <div class="table-wrap"><table id="groupTable"></table></div>
+        </article>
+        <article>
+          <h2>Backlog aberto</h2>
+          <div class="table-wrap"><table id="backlogTable"></table></div>
+        </article>
+      </section>
+    </main>
+    <script src="/app.js?v=11"></script>
+  </body>
+</html>

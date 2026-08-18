@@ -1,0 +1,103 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ecargo-analytics
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ecargo-222-credentials
+  namespace: ecargo-analytics
+type: Opaque
+stringData:
+  ECARGO_222_USER: "substituir-no-rancher"
+  ECARGO_222_PASSWORD: "substituir-no-rancher"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ecargo-analytics
+  namespace: ecargo-analytics
+  labels:
+    app: ecargo-analytics
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ecargo-analytics
+  template:
+    metadata:
+      labels:
+        app: ecargo-analytics
+    spec:
+      containers:
+        - name: ecargo-analytics
+          image: REGISTRY/PROJETO/ecargo-analytics:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8765
+          env:
+            - name: HOST
+              value: "0.0.0.0"
+            - name: PORT
+              value: "8765"
+            - name: ECARGO_222_USER
+              valueFrom:
+                secretKeyRef:
+                  name: ecargo-222-credentials
+                  key: ECARGO_222_USER
+            - name: ECARGO_222_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ecargo-222-credentials
+                  key: ECARGO_222_PASSWORD
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8765
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8765
+            initialDelaySeconds: 20
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 768Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ecargo-analytics
+  namespace: ecargo-analytics
+spec:
+  selector:
+    app: ecargo-analytics
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8765
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ecargo-analytics
+  namespace: ecargo-analytics
+spec:
+  rules:
+    - host: ecargo-analytics.loginlogistica.com.br
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ecargo-analytics
+                port:
+                  number: 80
