@@ -29,6 +29,21 @@ document.getElementById("downloadCsv").addEventListener("click", downloadCsv);
 document.getElementById("categoryMode").addEventListener("change", renderDashboard);
 document.getElementById("closeDetail").addEventListener("click", closeDetail);
 setDefaultDates();
+loadBase();
+
+async function loadBase() {
+  try {
+    const response = await fetch(`${appBasePath}/api/base`);
+    const payload = await response.json();
+    if (!response.ok) return;
+    applyPayload(payload);
+    if (records.length) {
+      setStatus(`${fmt.format(records.length)} chamados carregados da base acumulada.${syncText(payload)}`);
+    }
+  } catch {
+    setStatus("Nenhum arquivo carregado.");
+  }
+}
 
 async function uploadFile(event) {
   const file = event.target.files[0];
@@ -45,11 +60,8 @@ async function uploadFile(event) {
     return;
   }
 
-  records = payload.records || [];
-  options = payload.options || {};
-  buildFilters();
-  renderDashboard();
-  setStatus(`${fmt.format(records.length)} chamados carregados de ${file.name}.`);
+  applyPayload(payload);
+  setStatus(`${fmt.format(records.length)} chamados na base. ${importText(payload)} Arquivo: ${file.name}.${syncText(payload)}`);
 }
 
 async function fetch222() {
@@ -63,18 +75,34 @@ async function fetch222() {
   try {
     const payload = await fetch222Payload(start, end);
 
-    records = payload.records || [];
-    options = payload.options || {};
-    buildFilters();
-    renderDashboard();
+    applyPayload(payload);
     const warning = payload.warning ? ` ${payload.warning}` : "";
-    setStatus(`${fmt.format(records.length)} chamados do SUPORTE ECARGO carregados diretamente do 222.${warning}`);
+    setStatus(`${fmt.format(records.length)} chamados na base. ${importText(payload)}${syncText(payload)}${warning}`);
   } catch (error) {
     setStatus(`Falha ao buscar dados do 222: ${error.message}`);
   } finally {
     button.disabled = false;
     button.textContent = originalText;
   }
+}
+
+function applyPayload(payload) {
+  records = payload.records || [];
+  options = payload.options || {};
+  buildFilters();
+  renderDashboard();
+}
+
+function importText(payload) {
+  const result = payload.import_result;
+  if (!result) return "";
+  return `${fmt.format(result.inserted || 0)} novos, ${fmt.format(result.updated || 0)} atualizados.`;
+}
+
+function syncText(payload) {
+  const sync = payload.sync || {};
+  if (!sync.last_sync_status) return "";
+  return ` Última sync: ${sync.last_sync_status}.`;
 }
 
 async function fetch222Payload(start, end) {

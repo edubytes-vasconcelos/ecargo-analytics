@@ -4,7 +4,9 @@ import json
 import math
 import os
 import re
+import sqlite3
 import ssl
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -25,6 +27,9 @@ STATIC = ROOT / "static"
 BASE_PATH = "/" + os.environ.get("BASE_PATH", "").strip("/") if os.environ.get("BASE_PATH", "").strip("/") else ""
 UPLOADS = ROOT / "work" / "uploads"
 UPLOADS.mkdir(parents=True, exist_ok=True)
+DATA_DIR = Path(os.environ.get("DATA_DIR", ROOT / "work"))
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+DB_PATH = Path(os.environ.get("DB_PATH", DATA_DIR / "ecargo.sqlite"))
 LEGACY_REPO = ROOT / "chamados222pendencias.exe-master" / "chamados222pendencias.exe-master"
 LEGACY_SOURCE = LEGACY_REPO / "Chamados222Pendencias" / "Repository" / "Impls" / "ChamadosRepository.cs"
 
@@ -45,6 +50,8 @@ MONTH_NAMES = [
 
 TARGET_GROUP_ID = "24"
 TARGET_GROUP_NAME = "SUPORTE ECARGO"
+SYNC_INTERVAL_SECONDS = int(os.environ.get("SYNC_INTERVAL_SECONDS", "3600"))
+SYNC_LOOKBACK_HOURS = int(os.environ.get("SYNC_LOOKBACK_HOURS", "2"))
 
 
 RAW_COLUMNS = [
@@ -174,6 +181,117 @@ def analyze(path: Path) -> dict:
     df = _read_workbook(path)
     records = _filter_target_group(_build_records(df))
     return {"records": records, "options": _options(records), "total": len(records)}
+
+
+def _db() -> sqlite3.Connection:
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def init_db() -> None:
+    with _db() as conn:
+        conn.execute(
+            """
+            create table if not exists tickets (
+                id text primary key,
+                payload text not null,
+                opened_at text,
+                closed_at text,
+                updated_at text not null
+            )
+            """
+        )
+        conn.execute(
+            """
+            create table if not exists sync_state (
+                key text primary key,
+                value text not null
+            )
+            """
+        )
+
+
+def _set_state(key: str, value: str) -> None:
+    with _db() as conn:
+        conn.execute(
+            "insert into sync_state(key, value) values(?, ?) on conflict(key) do update set value=excluded.value",
+            (key, value),
+        )
+
+
+def _get_state(key: str) -> str:
+    with _db() as conn:
+        row = conn.execute("select value from sync_state where key = ?", (key,)).fetchone()
+    return "" if row is None else str(row["value"])
+
+
+def upsert_records(records: list[dict], source: str) -> dict:
+    now = datetime.now().isoformat(timespec="seconds")
+    inserted = 0
+    updated = 0
+    with _db() as conn:
+        for record in records:
+            ticket_id = str(record.get("#", "")).strip()
+            if not ticket_id:
+                continue
+            exists = conn.execute("select 1 from tickets where id = ?", (ticket_id,)).fetchone()
+            conn.execute(
+                """
+                insert into tickets(id, payload, opened_at, closed_at, updated_at)
+                values(?, ?, ?, ?, ?)
+                on conflict(id) do update set
+                    payload=excluded.payload,
+                    opened_at=excluded.opened_at,
+                    closed_at=excluded.closed_at,
+                    updated_at=excluded.updated_at
+                """,
+                (
+                    ticket_id,
+                    json.dumps(record, ensure_ascii=False),
+                    str(record.get("Data de solicitação", "")),
+                    str(record.get("Data de encerramento", "")),
+                    now,
+                ),
+            )
+            if exists:
+                updated += 1
+            else:
+                inserted += 1
+        conn.execute(
+            "insert into sync_state(key, value) values(?, ?) on conflict(key) do update set value=excluded.value",
+            ("last_import_source", source),
+        )
+        conn.execute(
+            "insert into sync_state(key, value) values(?, ?) on conflict(key) do update set value=excluded.value",
+            ("last_import_at", now),
+        )
+    return {"inserted": inserted, "updated": updated, "processed": inserted + updated}
+
+
+def base_records() -> list[dict]:
+    with _db() as conn:
+        rows = conn.execute("select payload from tickets order by opened_at").fetchall()
+    return [json.loads(row["payload"]) for row in rows]
+
+
+def base_payload(extra: dict | None = None) -> dict:
+    records = base_records()
+    payload = {
+        "records": records,
+        "options": _options(records),
+        "total": len(records),
+        "source": "base",
+        "sync": {
+            "last_import_at": _get_state("last_import_at"),
+            "last_import_source": _get_state("last_import_source"),
+            "last_sync_at": _get_state("last_sync_at"),
+            "last_sync_status": _get_state("last_sync_status"),
+        },
+    }
+    if extra:
+        payload.update(extra)
+    return payload
 
 
 def _filter_target_group(records: list[dict]) -> list[dict]:
@@ -536,6 +654,34 @@ def fetch_222(
     }
 
 
+def sync_222_once() -> dict:
+    result = fetch_222(hours=SYNC_LOOKBACK_HOURS, group_scope="ecargo")
+    import_result = upsert_records(result["records"], "222-auto")
+    now = datetime.now().isoformat(timespec="seconds")
+    _set_state("last_sync_at", now)
+    _set_state(
+        "last_sync_status",
+        f"ok: {import_result['processed']} processados, {import_result['inserted']} novos, {import_result['updated']} atualizados",
+    )
+    return import_result
+
+
+def sync_loop() -> None:
+    while True:
+        try:
+            sync_222_once()
+        except Exception as exc:
+            _set_state("last_sync_status", f"erro: {type(exc).__name__}: {str(exc)[:180]}")
+        time.sleep(SYNC_INTERVAL_SECONDS)
+
+
+def start_background_sync() -> None:
+    if os.environ.get("ENABLE_AUTO_SYNC", "1").strip().lower() in {"0", "false", "no"}:
+        return
+    thread = threading.Thread(target=sync_loop, daemon=True, name="ecargo-222-sync")
+    thread.start()
+
+
 class Handler(BaseHTTPRequestHandler):
     def _send_json(self, payload: dict, status: int = 200) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -565,6 +711,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         path = self._route_path()
+        if path == "/api/base":
+            self._send_json(base_payload())
+            return
         if path == "/api/fetch-222":
             params = parse_qs(urlparse(self.path).query)
             hours = int(params.get("hours", ["24"])[0] or "24")
@@ -572,8 +721,16 @@ class Handler(BaseHTTPRequestHandler):
             end_date = params.get("end", [None])[0]
             group_scope = params.get("scope", ["all"])[0]
             try:
+                result = fetch_222(hours=hours, start_date=start_date, end_date=end_date, group_scope=group_scope)
+                import_result = upsert_records(result["records"], "222-manual")
                 self._send_json(
-                    fetch_222(hours=hours, start_date=start_date, end_date=end_date, group_scope=group_scope)
+                    base_payload(
+                        {
+                            "import_result": import_result,
+                            "warning": result.get("warning", ""),
+                            "period": result.get("period", {}),
+                        }
+                    )
                 )
             except Exception as exc:
                 self._send_json({"error": str(exc)}, 502)
@@ -612,7 +769,9 @@ class Handler(BaseHTTPRequestHandler):
             fh.write(file_item.file.read())
 
         try:
-            self._send_json(analyze(target))
+            result = analyze(target)
+            import_result = upsert_records(result["records"], f"excel:{Path(file_item.filename).name}")
+            self._send_json(base_payload({"import_result": import_result}))
         except Exception as exc:
             self._send_json({"error": f"Não consegui processar o arquivo: {exc}"}, 500)
 
@@ -626,6 +785,8 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
+    init_db()
+    start_background_sync()
     host = os.environ.get("HOST", "127.0.0.1")
     port = int(os.environ.get("PORT", "8765"))
     server = ThreadingHTTPServer((host, port), Handler)

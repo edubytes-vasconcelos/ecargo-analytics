@@ -30,3 +30,51 @@ No Rancher:
 ## Observação
 
 A busca direta no 222 usa a API operacional antiga e pode retornar menos chamados que o Excel exportado. Para números gerenciais, mantenha o upload do Excel como fonte confiável até a integração com a API nova ou com o endpoint de exportação oficial.
+
+## Configuração que funcionou no Rancher
+
+URL publicada:
+
+```text
+https://ecargohml.k8s.loginlogistica.com.br/ecargo-analytics
+```
+
+Deployment:
+
+```text
+HOST=0.0.0.0
+PORT=8765
+BASE_PATH=/ecargo-analytics
+```
+
+Ingress:
+
+```yaml
+spec:
+  ingressClassName: kong
+  rules:
+    - host: ecargohml.k8s.loginlogistica.com.br
+      http:
+        paths:
+          - path: /ecargo-analytics
+            pathType: Prefix
+            backend:
+              service:
+                name: ecargo-analytics
+                port:
+                  number: 80
+  tls:
+    - hosts:
+        - ecargohml.k8s.loginlogistica.com.br
+      secretName: lets-login
+```
+
+Observações:
+
+- O Service fica `80 -> 8765`.
+- O cluster bloqueia imagem com tag `latest`; use tag imutável com SHA do commit.
+- O package no GHCR precisa estar público, ou o Deployment precisa de `imagePullSecret`.
+- A base acumulada fica em SQLite no volume persistente montado em `/app/data`.
+- O Excel deve ser usado como carga inicial confiável.
+- Depois da carga inicial, o app sincroniza a API 222 automaticamente a cada hora.
+- A sincronização incremental usa `update_time` com janela de 2 horas (`SYNC_LOOKBACK_HOURS=2`) para reduzir risco de perder atualizações.
