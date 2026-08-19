@@ -21,12 +21,25 @@ const monthNames = [
 
 const fmt = new Intl.NumberFormat("pt-BR");
 const fmt1 = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1, minimumFractionDigits: 1 });
+const supportExcludedCategories = [
+  "ALTERAR PERFIL",
+  "ALTERAÇÃO DE PERFIL - REVISÃO",
+  "CRIAÇÃO/ALTERAÇÃO PERFIL",
+  "DESBLOQUEAR ACESSO",
+  "MANUTENÇÃO DE PERFIL",
+  "REMOVER ACESSO",
+  "REMOVER ACESSO - REVISÃO",
+  "RESET DE SENHA",
+];
 
 document.getElementById("fileInput").addEventListener("change", uploadFile);
 document.getElementById("fetch222").addEventListener("click", fetch222);
 document.getElementById("clearFilters").addEventListener("click", clearFilters);
 document.getElementById("downloadCsv").addEventListener("click", downloadCsv);
 document.getElementById("categoryMode").addEventListener("change", renderDashboard);
+document.getElementById("groupEvolutiva").addEventListener("click", () => applyCategoryGroup("include", ["EVOLUTIVA"]));
+document.getElementById("groupMudanca").addEventListener("click", () => applyCategoryGroup("include", ["MUDANÇA", "MUDANCA"]));
+document.getElementById("groupSuporte").addEventListener("click", () => applyCategoryGroup("exclude", supportExcludedCategories));
 document.getElementById("closeDetail").addEventListener("click", closeDetail);
 setDefaultDates();
 loadBase();
@@ -197,6 +210,23 @@ function buildCheckList(id, values) {
 
 function selected(id) {
   return new Set([...document.querySelectorAll(`#${id} input:checked`)].map((el) => String(el.value)));
+}
+
+function applyCategoryGroup(mode, categoryNames) {
+  const wanted = new Set(categoryNames.map(normalizeFilterText));
+  document.getElementById("categoryMode").value = mode;
+  document.querySelectorAll("#categoryList input").forEach((input) => {
+    input.checked = wanted.has(normalizeFilterText(input.value));
+  });
+  renderDashboard();
+}
+
+function normalizeFilterText(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toUpperCase();
 }
 
 function filteredRecords() {

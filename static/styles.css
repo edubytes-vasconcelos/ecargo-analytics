@@ -191,6 +191,27 @@ button:disabled {
   font-weight: 600;
 }
 
+.category-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.category-shortcuts button {
+  padding: 6px 9px;
+  border-color: var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.category-shortcuts button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .check-list {
   display: grid;
   gap: 6px;
