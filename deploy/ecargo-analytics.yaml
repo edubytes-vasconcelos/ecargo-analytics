@@ -58,7 +58,7 @@ spec:
             - name: DATA_DIR
               value: "/app/data"
             - name: SYNC_INTERVAL_SECONDS
-              value: "3600"
+              value: "600"
             - name: SYNC_LOOKBACK_HOURS
               value: "2"
             - name: ECARGO_222_USER
