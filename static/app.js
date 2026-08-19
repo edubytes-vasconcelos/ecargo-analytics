@@ -30,6 +30,9 @@ const supportExcludedCategories = [
   "REMOVER ACESSO",
   "REMOVER ACESSO - REVISÃO",
   "RESET DE SENHA",
+  "EVOLUTIVA",
+  "MUDANÇA",
+  "MUDANCA",
 ];
 const supportViewExcludedCategories = [...supportExcludedCategories, "ERRO"];
 const supportViewExcludedStatuses = ["01-NOVO PROBLEMA"];
