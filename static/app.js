@@ -40,7 +40,12 @@ document.getElementById("categoryMode").addEventListener("change", renderDashboa
 document.getElementById("groupEvolutiva").addEventListener("click", () => applyCategoryGroup("include", ["EVOLUTIVA"]));
 document.getElementById("groupMudanca").addEventListener("click", () => applyCategoryGroup("include", ["MUDANÇA", "MUDANCA"]));
 document.getElementById("groupSuporte").addEventListener("click", () => applyCategoryGroup("exclude", supportExcludedCategories));
-document.getElementById("supportApplyFilter").addEventListener("click", () => applyCategoryGroup("exclude", supportExcludedCategories));
+document.getElementById("supportApplyFilter").addEventListener("click", () => {
+  applyCategoryGroup("exclude", supportExcludedCategories);
+  setActiveView("dashboard");
+});
+document.getElementById("tabDashboard").addEventListener("click", () => setActiveView("dashboard"));
+document.getElementById("tabSupport").addEventListener("click", () => setActiveView("support"));
 document.getElementById("closeDetail").addEventListener("click", closeDetail);
 setDefaultDates();
 loadBase();
@@ -181,6 +186,15 @@ function formatDateBr(value) {
 
 function setStatus(text) {
   document.getElementById("status").textContent = text;
+}
+
+function setActiveView(view) {
+  document.querySelectorAll("[data-view]").forEach((section) => {
+    section.hidden = section.dataset.view !== view;
+  });
+  document.getElementById("tabDashboard").classList.toggle("active", view === "dashboard");
+  document.getElementById("tabSupport").classList.toggle("active", view === "support");
+  closeDetail();
 }
 
 function buildFilters() {

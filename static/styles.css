@@ -140,6 +140,33 @@ button:disabled {
   font-size: 13px;
 }
 
+.view-tabs {
+  display: inline-flex;
+  gap: 4px;
+  margin: 0 0 12px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.view-tabs button {
+  min-width: 124px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.view-tabs button.active {
+  background: var(--accent);
+  color: white;
+}
+
+[hidden] {
+  display: none !important;
+}
+
 .filters,
 .tables article,
 .kpis article,

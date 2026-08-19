@@ -32,7 +32,12 @@
 
       <section id="status" class="status">Nenhum arquivo carregado.</section>
 
-      <section class="filters">
+      <nav class="view-tabs" aria-label="Visões do dashboard">
+        <button id="tabDashboard" class="active" type="button">Painel geral</button>
+        <button id="tabSupport" type="button">Suporte 48h</button>
+      </nav>
+
+      <section class="filters" data-view="dashboard">
         <div class="filter-head">
           <h2>Filtros</h2>
           <button id="clearFilters" type="button">Limpar</button>
@@ -69,7 +74,7 @@
         </div>
       </section>
 
-      <section class="kpis">
+      <section class="kpis" data-view="dashboard">
         <article class="current-week-card"><span id="currentWeekLabel">Semana atual</span><strong id="kpiWeekOpened">0</strong><em id="kpiWeekOpenedDelta">entraram nesta semana</em></article>
         <article><span>Finalizados na semana atual</span><strong id="kpiWeekClosed">0</strong><em id="kpiWeekClosedDelta">sem comparação</em></article>
         <article><span>Saldo da semana atual</span><strong id="kpiWeekBalance">0</strong><em id="kpiWeekBalanceHint">entradas - finalizados</em></article>
@@ -77,7 +82,7 @@
         <article><span>Mediana encerrados</span><strong id="kpiMedian">0h</strong><em id="kpiAvg">média 0h</em></article>
       </section>
 
-      <section class="support-view">
+      <section class="support-view" data-view="support" hidden>
         <div class="support-head">
           <div>
             <h2>Visão do suporte</h2>
@@ -103,7 +108,7 @@
         </div>
       </section>
 
-      <section class="meeting-board">
+      <section class="meeting-board" data-view="dashboard">
         <article class="focus-panel">
           <div>
             <h2>Leitura para reunião</h2>
@@ -121,7 +126,7 @@
         </article>
       </section>
 
-      <section class="charts">
+      <section class="charts" data-view="dashboard">
         <article>
           <h2>Tendência semanal</h2>
           <div id="weeklyChart" class="chart-area"></div>
@@ -147,7 +152,7 @@
         <div class="table-wrap detail-wrap"><table id="detailTable"></table></div>
       </section>
 
-      <section class="tables">
+      <section class="tables" data-view="dashboard">
         <article>
           <h2>Resumo semanal de produção</h2>
           <div class="table-wrap"><table id="weeklyTable"></table></div>
@@ -174,6 +179,6 @@
         </article>
       </section>
     </main>
-    <script src="__BASE_PATH__/app.js?v=14"></script>
+    <script src="__BASE_PATH__/app.js?v=15"></script>
   </body>
 </html>
