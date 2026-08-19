@@ -31,6 +31,8 @@ const supportExcludedCategories = [
   "REMOVER ACESSO - REVISÃO",
   "RESET DE SENHA",
 ];
+const supportViewExcludedCategories = [...supportExcludedCategories, "ERRO"];
+const supportViewExcludedStatuses = ["01-NOVO PROBLEMA"];
 
 document.getElementById("fileInput").addEventListener("change", uploadFile);
 document.getElementById("fetch222").addEventListener("click", fetch222);
@@ -40,10 +42,6 @@ document.getElementById("categoryMode").addEventListener("change", renderDashboa
 document.getElementById("groupEvolutiva").addEventListener("click", () => applyCategoryGroup("include", ["EVOLUTIVA"]));
 document.getElementById("groupMudanca").addEventListener("click", () => applyCategoryGroup("include", ["MUDANÇA", "MUDANCA"]));
 document.getElementById("groupSuporte").addEventListener("click", () => applyCategoryGroup("exclude", supportExcludedCategories));
-document.getElementById("supportApplyFilter").addEventListener("click", () => {
-  applyCategoryGroup("exclude", supportExcludedCategories);
-  setActiveView("dashboard");
-});
 document.getElementById("tabDashboard").addEventListener("click", () => setActiveView("dashboard"));
 document.getElementById("tabSupport").addEventListener("click", () => setActiveView("support"));
 document.getElementById("closeDetail").addEventListener("click", closeDetail);
@@ -348,7 +346,7 @@ function renderSupportView() {
 
 function supportOpenRows(sourceRows) {
   return sourceRows
-    .filter((row) => row["Situação gerencial"] === "Em aberto" && isSupportCategory(row))
+    .filter((row) => row["Situação gerencial"] === "Em aberto" && isSupportViewTicket(row))
     .map((row) => {
       const hours = openHours(row);
       const sla = supportSla(hours);
@@ -375,6 +373,15 @@ function isSupportCategory(row) {
   const category = normalizeFilterText(row["Categoria de terceiro nível"]);
   const excluded = new Set(supportExcludedCategories.map(normalizeFilterText));
   return !excluded.has(category);
+}
+
+function isSupportViewTicket(row) {
+  const category = normalizeFilterText(row["Categoria de terceiro nível"]);
+  const primaryCategory = normalizeFilterText(row.Categoria);
+  const status = normalizeFilterText(row.Status);
+  const excludedCategories = new Set(supportViewExcludedCategories.map(normalizeFilterText));
+  const excludedStatuses = new Set(supportViewExcludedStatuses.map(normalizeFilterText));
+  return !excludedCategories.has(category) && !excludedCategories.has(primaryCategory) && !excludedStatuses.has(status);
 }
 
 function openHours(row) {
