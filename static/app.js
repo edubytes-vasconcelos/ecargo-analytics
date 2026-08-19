@@ -34,7 +34,7 @@ const supportExcludedCategories = [
   "MUDANÇA",
   "MUDANCA",
 ];
-const supportViewExcludedCategories = [...supportExcludedCategories, "ERRO"];
+const supportViewExcludedCategories = [...supportExcludedCategories];
 const supportViewExcludedStatuses = ["01-NOVO PROBLEMA"];
 
 document.getElementById("fileInput").addEventListener("change", uploadFile);
