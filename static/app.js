@@ -3,6 +3,7 @@ let options = {};
 const tableState = {};
 const tableModels = {};
 const appBasePath = document.documentElement.dataset.basePath || "";
+const viewPreferenceKey = "ecargo.analytics.activeView";
 
 const monthNames = [
   "Janeiro",
@@ -49,6 +50,7 @@ document.getElementById("tabDashboard").addEventListener("click", () => setActiv
 document.getElementById("tabSupport").addEventListener("click", () => setActiveView("support"));
 document.getElementById("closeDetail").addEventListener("click", closeDetail);
 setDefaultDates();
+setActiveView(savedActiveView());
 loadBase();
 
 async function loadBase() {
@@ -190,12 +192,18 @@ function setStatus(text) {
 }
 
 function setActiveView(view) {
+  const nextView = view === "support" ? "support" : "dashboard";
   document.querySelectorAll("[data-view]").forEach((section) => {
-    section.hidden = section.dataset.view !== view;
+    section.hidden = section.dataset.view !== nextView;
   });
-  document.getElementById("tabDashboard").classList.toggle("active", view === "dashboard");
-  document.getElementById("tabSupport").classList.toggle("active", view === "support");
+  document.getElementById("tabDashboard").classList.toggle("active", nextView === "dashboard");
+  document.getElementById("tabSupport").classList.toggle("active", nextView === "support");
+  localStorage.setItem(viewPreferenceKey, nextView);
   closeDetail();
+}
+
+function savedActiveView() {
+  return localStorage.getItem(viewPreferenceKey) === "support" ? "support" : "dashboard";
 }
 
 function buildFilters() {
