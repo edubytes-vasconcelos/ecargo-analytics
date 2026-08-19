@@ -40,6 +40,7 @@ document.getElementById("categoryMode").addEventListener("change", renderDashboa
 document.getElementById("groupEvolutiva").addEventListener("click", () => applyCategoryGroup("include", ["EVOLUTIVA"]));
 document.getElementById("groupMudanca").addEventListener("click", () => applyCategoryGroup("include", ["MUDANÇA", "MUDANCA"]));
 document.getElementById("groupSuporte").addEventListener("click", () => applyCategoryGroup("exclude", supportExcludedCategories));
+document.getElementById("supportApplyFilter").addEventListener("click", () => applyCategoryGroup("exclude", supportExcludedCategories));
 document.getElementById("closeDetail").addEventListener("click", closeDetail);
 setDefaultDates();
 loadBase();
@@ -281,6 +282,7 @@ function renderDashboard() {
   document.getElementById("focusOldBacklog").textContent = fmt.format(oldBacklog30);
   document.getElementById("meetingNarrative").textContent = meetingNarrative(rows.length, closed, open, currentWeek, previousWeek, oldBacklog15);
 
+  renderSupportView();
   renderCharts(rows, weeklyRows, agingRows);
   closeDetail();
 
@@ -305,6 +307,98 @@ function renderDashboard() {
     showDetails(`Grupo ${row.Grupo}`, rows.filter((r) => (r["Grupo solucionador"] || "Não informado") === row.Grupo))
   );
   renderTable("backlogTable", backlog(rows), ["#", "Categoria", "Grupo", "Status", "Localidade", "Data de solicitação", "Dias aberto", "Título"]);
+}
+
+function renderSupportView() {
+  const rows = supportOpenRows(records);
+  const breached = rows.filter((row) => row._slaLevel === "breached").length;
+  const warning = rows.filter((row) => row._slaLevel === "warning").length;
+  const ok = rows.filter((row) => row._slaLevel === "ok").length;
+
+  document.getElementById("supportOpenTotal").textContent = fmt.format(rows.length);
+  document.getElementById("supportSlaBreached").textContent = fmt.format(breached);
+  document.getElementById("supportSlaWarning").textContent = fmt.format(warning);
+  document.getElementById("supportSlaOk").textContent = fmt.format(ok);
+
+  renderTable("supportSlaTable", supportSlaSummary(rows), ["Faixa", "Chamados", "% fila"], supportSlaRowClass, (row) =>
+    showDetails(`Suporte - ${row.Faixa}`, rows.filter((ticket) => ticket["SLA"] === row.Faixa).map((ticket) => ticket._source))
+  );
+  renderTable(
+    "supportOpenTable",
+    rows,
+    ["#", "SLA", "Horas aberto", "Horas para SLA", "Categoria", "Subcategoria", "Grupo", "Status", "Data de solicitação", "Título"],
+    supportSlaRowClass,
+    (row) => showDetails(`Chamado ${row["#"]}`, [row._source])
+  );
+}
+
+function supportOpenRows(sourceRows) {
+  return sourceRows
+    .filter((row) => row["Situação gerencial"] === "Em aberto" && isSupportCategory(row))
+    .map((row) => {
+      const hours = openHours(row);
+      const sla = supportSla(hours);
+      return {
+        "#": row["#"],
+        SLA: sla.label,
+        "Horas aberto": hours === null ? "" : fmt1.format(hours),
+        "Horas para SLA": hours === null ? "" : fmt1.format(48 - hours),
+        Categoria: row["Categoria de terceiro nível"] || "Não informado",
+        Subcategoria: row.Subcategoria || "Não informado",
+        Grupo: row["Grupo solucionador"] || "Não informado",
+        Status: row.Status || "",
+        "Data de solicitação": row["Data de solicitação"],
+        Título: row["Título"],
+        _slaLevel: sla.level,
+        _hoursOpen: hours,
+        _source: row,
+      };
+    })
+    .sort((a, b) => supportPriority(a) - supportPriority(b) || (b._hoursOpen || 0) - (a._hoursOpen || 0));
+}
+
+function isSupportCategory(row) {
+  const category = normalizeFilterText(row["Categoria de terceiro nível"]);
+  const excluded = new Set(supportExcludedCategories.map(normalizeFilterText));
+  return !excluded.has(category);
+}
+
+function openHours(row) {
+  const opened = new Date(String(row["Data de solicitação"]).replace(" ", "T"));
+  if (Number.isNaN(opened.getTime())) return null;
+  return Math.max(0, (new Date() - opened) / 3600000);
+}
+
+function supportSla(hours) {
+  if (hours === null) return { label: "Sem data", level: "unknown" };
+  if (hours >= 48) return { label: "SLA vencido", level: "breached" };
+  if (hours >= 36) return { label: "Atenção", level: "warning" };
+  return { label: "Dentro do SLA", level: "ok" };
+}
+
+function supportPriority(row) {
+  return { breached: 0, warning: 1, unknown: 2, ok: 3 }[row._slaLevel] ?? 4;
+}
+
+function supportSlaSummary(rows) {
+  const buckets = [
+    { Faixa: "SLA vencido", level: "breached" },
+    { Faixa: "Atenção", level: "warning" },
+    { Faixa: "Dentro do SLA", level: "ok" },
+    { Faixa: "Sem data", level: "unknown" },
+  ];
+  return buckets
+    .map((bucket) => {
+      const count = rows.filter((row) => row._slaLevel === bucket.level).length;
+      return { ...bucket, Chamados: count, "% fila": percent(count, rows.length), _slaLevel: bucket.level };
+    })
+    .filter((row) => row.Chamados > 0 || row._slaLevel !== "unknown");
+}
+
+function supportSlaRowClass(row) {
+  if (row._slaLevel === "breached") return "sla-breached";
+  if (row._slaLevel === "warning") return "sla-warning";
+  return "";
 }
 
 function monthly(rows) {

@@ -77,6 +77,32 @@
         <article><span>Mediana encerrados</span><strong id="kpiMedian">0h</strong><em id="kpiAvg">média 0h</em></article>
       </section>
 
+      <section class="support-view">
+        <div class="support-head">
+          <div>
+            <h2>Visão do suporte</h2>
+            <p>Abertos de Suporte com SLA de 48h, sem as categorias de perfil, acesso e senha.</p>
+          </div>
+          <button id="supportApplyFilter" type="button">Aplicar filtro Suporte</button>
+        </div>
+        <div class="support-kpis">
+          <article><span>Total aberto</span><strong id="supportOpenTotal">0</strong><em>fila atual</em></article>
+          <article><span>SLA vencido</span><strong id="supportSlaBreached">0</strong><em>acima de 48h</em></article>
+          <article><span>Atenção</span><strong id="supportSlaWarning">0</strong><em>36h a 48h</em></article>
+          <article><span>Dentro do SLA</span><strong id="supportSlaOk">0</strong><em>menos de 36h</em></article>
+        </div>
+        <div class="support-grid">
+          <article>
+            <h3>Prioridade por SLA</h3>
+            <div class="table-wrap compact-table"><table id="supportSlaTable"></table></div>
+          </article>
+          <article>
+            <h3>Chamados abertos de suporte</h3>
+            <div class="table-wrap support-table"><table id="supportOpenTable"></table></div>
+          </article>
+        </div>
+      </section>
+
       <section class="meeting-board">
         <article class="focus-panel">
           <div>
@@ -148,6 +174,6 @@
         </article>
       </section>
     </main>
-    <script src="__BASE_PATH__/app.js?v=13"></script>
+    <script src="__BASE_PATH__/app.js?v=14"></script>
   </body>
 </html>

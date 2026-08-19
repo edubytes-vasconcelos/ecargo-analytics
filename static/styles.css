@@ -268,6 +268,76 @@ button:disabled {
   white-space: normal;
 }
 
+.support-view {
+  margin-bottom: 12px;
+  padding: 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.support-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.support-head p {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.support-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.support-kpis article,
+.support-grid article {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-2);
+}
+
+.support-kpis span,
+.support-kpis em {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+}
+
+.support-kpis strong {
+  display: block;
+  margin: 5px 0;
+  color: var(--ink);
+  font-size: 28px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.support-grid {
+  display: grid;
+  grid-template-columns: 0.8fr 1.6fr;
+  gap: 12px;
+}
+
+.support-grid h3 {
+  margin-bottom: 10px;
+  font-size: 15px;
+}
+
+.support-table {
+  max-height: 360px;
+}
+
 .meeting-board {
   display: grid;
   grid-template-columns: 1.7fr 1fr;
@@ -539,6 +609,18 @@ tr.is-current-week td {
   font-weight: 700;
 }
 
+tr.sla-breached td {
+  background: #fff0f0;
+  color: #8f1f1f;
+  font-weight: 700;
+}
+
+tr.sla-warning td {
+  background: #fff7df;
+  color: #745100;
+  font-weight: 700;
+}
+
 .clickable-row {
   cursor: pointer;
 }
@@ -587,6 +669,8 @@ th {
 
   .filter-grid,
   .kpis,
+  .support-kpis,
+  .support-grid,
   .meeting-board,
   .charts,
   .tables {
