@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="pt-BR" data-base-path="__BASE_PATH__">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Painel de Projetos</title>
+    <link rel="stylesheet" href="__BASE_PATH__/projects/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>Painel de Projetos</h1>
+        <p>Acompanhamento automático pelo cronograma mais recente da pasta cadastrada.</p>
+      </div>
+      <div class="top-actions">
+        <a class="nav-link" href="__BASE_PATH__/">Chamados</a>
+        <button id="refreshButton" type="button" title="Buscar novo cronograma">Buscar novo cronograma</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="register-panel" aria-labelledby="register-title">
+        <h2 id="register-title">Cadastrar projeto</h2>
+        <form id="projectForm">
+          <label>
+            Nome do projeto
+            <input id="projectName" name="name" autocomplete="off" required />
+          </label>
+          <label>
+            Pasta do cronograma
+            <input id="folderPath" name="folderPath" placeholder="Ex.: C:\Projetos\Obra A\Cronograma" required />
+          </label>
+          <button type="submit">Adicionar</button>
+        </form>
+        <p class="hint">O painel procura o arquivo `.xml`, `.mpp` ou `.mpt` mais recente. No app unificado, exporte o cronograma para XML para atualizar as métricas automaticamente.</p>
+      </section>
+
+      <section aria-labelledby="dashboard-title">
+        <div class="section-heading">
+          <h2 id="dashboard-title">Projetos</h2>
+          <span id="lastUpdate">Ainda não atualizado</span>
+        </div>
+        <div id="projects" class="project-grid"></div>
+      </section>
+    </main>
+
+    <template id="projectTemplate">
+      <article class="project-card">
+        <div class="card-header">
+          <div>
+            <h3 data-field="name"></h3>
+            <p data-field="folder"></p>
+          </div>
+          <div class="header-actions">
+            <button type="button" data-action="report" title="Gerar e-mail de status">Gerar status report</button>
+            <button type="button" data-action="back" title="Voltar para o dashboard">Voltar</button>
+            <button type="button" data-action="delete" title="Remover projeto">Remover</button>
+          </div>
+        </div>
+        <div class="status-line" data-field="message"></div>
+        <div class="kpi-strip">
+          <div class="kpi-card primary">
+            <span>Planejado</span>
+            <strong data-field="plannedPercent"></strong>
+          </div>
+          <div class="kpi-card primary">
+            <span>Realizado</span>
+            <strong data-field="realizedPercent"></strong>
+          </div>
+          <div class="kpi-card" data-field="varianceCard">
+            <span>Desvio</span>
+            <strong data-field="variancePercent"></strong>
+          </div>
+          <div class="kpi-card attention">
+            <span>Atenção</span>
+            <strong data-field="attentionTasks"></strong>
+          </div>
+        </div>
+        <div class="progress-wrap">
+          <div class="progress-labels">
+            <span>Planejado <b data-field="plannedLabel"></b></span>
+            <span>Realizado <b data-field="realizedLabel"></b></span>
+          </div>
+          <div class="progress-bar planned"><span data-field="plannedProgress"></span></div>
+          <div class="progress-bar realized"><span data-field="progress"></span></div>
+        </div>
+        <dl class="metrics">
+          <div><dt>Tarefas</dt><dd data-field="totalTasks"></dd></div>
+          <div><dt>Concluidas</dt><dd data-field="completedTasks"></dd></div>
+          <div><dt>Em andamento</dt><dd data-field="inProgressTasks"></dd></div>
+          <div><dt>Atrasadas</dt><dd data-field="lateTasks"></dd></div>
+        </dl>
+        <div class="file-box">
+          <div>
+            <span data-field="fileName"></span>
+            <small data-field="fileDate"></small>
+          </div>
+          <div>
+            <span>Fonte dos números</span>
+            <small>Planejado e realizado vêm da linha resumo do Project quando disponível.</small>
+          </div>
+        </div>
+        <div class="task-panel">
+          <div class="task-title">
+            <span>Tarefas na ordem do cronograma</span>
+            <div class="task-filters" data-field="taskFilters"></div>
+          </div>
+          <div class="task-list" data-field="tasks"></div>
+        </div>
+      </article>
+    </template>
+
+    <div id="reportModal" class="modal" hidden>
+      <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="reportTitle">
+        <div class="modal-header">
+          <h2 id="reportTitle">Status report</h2>
+          <button id="closeReportButton" type="button" title="Fechar">Fechar</button>
+        </div>
+        <label>
+          Assunto
+          <input id="reportSubject" readonly />
+        </label>
+        <label>
+          Corpo do e-mail
+          <textarea id="reportBody" readonly rows="18"></textarea>
+        </label>
+        <div class="modal-actions">
+          <button id="copyReportButton" type="button">Copiar e-mail</button>
+          <a id="mailtoReportLink" class="button-link" href="#">Abrir no e-mail</a>
+        </div>
+      </div>
+    </div>
+
+    <script src="__BASE_PATH__/projects/app.js?v=1"></script>
+  </body>
+</html>

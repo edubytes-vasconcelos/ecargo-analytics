@@ -4,6 +4,7 @@ import json
 import math
 import os
 import re
+import io
 import sqlite3
 import ssl
 import threading
@@ -12,12 +13,16 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, time as datetime_time
 from http.cookiejar import CookieJar
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
-import cgi
+try:
+    import cgi
+except ModuleNotFoundError:
+    cgi = None
 
 import pandas as pd
 
@@ -30,6 +35,7 @@ UPLOADS.mkdir(parents=True, exist_ok=True)
 DATA_DIR = Path(os.environ.get("DATA_DIR", ROOT / "work"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = Path(os.environ.get("DB_PATH", DATA_DIR / "ecargo.sqlite"))
+PROJECTS_FILE = Path(os.environ.get("PROJECTS_FILE", DATA_DIR / "projects.json"))
 LEGACY_REPO = ROOT / "chamados222pendencias.exe-master" / "chamados222pendencias.exe-master"
 LEGACY_SOURCE = LEGACY_REPO / "Chamados222Pendencias" / "Repository" / "Impls" / "ChamadosRepository.cs"
 
@@ -192,6 +198,36 @@ def analyze(path: Path) -> dict:
     df = _read_workbook(path)
     records = _filter_target_group(_build_records(df))
     return {"records": records, "options": _options(records), "total": len(records)}
+
+
+class UploadFile:
+    def __init__(self, filename: str, data: bytes):
+        self.filename = filename
+        self.file = io.BytesIO(data)
+
+
+def _read_uploaded_file(headers, rfile) -> UploadFile | None:
+    content_type = headers.get("Content-Type", "")
+    if cgi is not None:
+        form = cgi.FieldStorage(fp=rfile, headers=headers, environ={"REQUEST_METHOD": "POST"})
+        return form["file"] if "file" in form else None
+
+    match = re.search(r'boundary="?([^";]+)"?', content_type)
+    if not match:
+        return None
+    length = int(headers.get("Content-Length", "0") or "0")
+    body = rfile.read(length)
+    boundary = b"--" + match.group(1).encode("utf-8")
+    for part in body.split(boundary):
+        if b'Content-Disposition:' not in part or b'name="file"' not in part:
+            continue
+        header_blob, _, content = part.partition(b"\r\n\r\n")
+        disposition = header_blob.decode("utf-8", errors="replace")
+        filename_match = re.search(r'filename="([^"]+)"', disposition)
+        if not filename_match:
+            return None
+        return UploadFile(filename_match.group(1), content.rstrip(b"\r\n-"))
+    return None
 
 
 def _db() -> sqlite3.Connection:
@@ -703,6 +739,252 @@ def start_background_sync() -> None:
     thread.start()
 
 
+PROJECT_EXTENSIONS = {".xml", ".mpp", ".mpt"}
+
+
+def ensure_projects_store() -> None:
+    PROJECTS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    if not PROJECTS_FILE.exists():
+        PROJECTS_FILE.write_text("[]\n", encoding="utf-8")
+
+
+def read_projects() -> list[dict]:
+    ensure_projects_store()
+    return json.loads(PROJECTS_FILE.read_text(encoding="utf-8") or "[]")
+
+
+def write_projects(projects: list[dict]) -> None:
+    ensure_projects_store()
+    PROJECTS_FILE.write_text(json.dumps(projects, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def _project_text(node: ET.Element | None, name: str) -> str:
+    if node is None:
+        return ""
+    child = node.find(name)
+    return "" if child is None or child.text is None else str(child.text).strip()
+
+
+def _project_children(node: ET.Element | None, name: str) -> list[ET.Element]:
+    if node is None:
+        return []
+    return list(node.findall(name))
+
+
+def _project_date(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    text = str(value).replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        parsed_ts = pd.to_datetime(text, errors="coerce")
+        if pd.isna(parsed_ts):
+            return None
+        parsed = parsed_ts.to_pydatetime()
+    return parsed.replace(tzinfo=None)
+
+
+def _project_iso(value: datetime | None) -> str | None:
+    return value.isoformat() if value else None
+
+
+def _project_number(value, fallback: float = 0) -> float:
+    try:
+        number = float(str(value).replace("%", "").replace(",", ".").strip())
+    except Exception:
+        return fallback
+    return number if math.isfinite(number) else fallback
+
+
+def _project_percent(value, fallback: float = 0) -> int:
+    return max(0, min(100, round(_project_number(value, fallback))))
+
+
+def _project_add_days(value: datetime, days: int) -> datetime:
+    return value + timedelta(days=days)
+
+
+def _planned_percent_by_date(start: datetime | None, finish: datetime | None, reference: datetime) -> int:
+    if not start or not finish:
+        return 0
+    if reference <= start:
+        return 0
+    if reference >= finish:
+        return 100
+    duration = (finish - start).total_seconds()
+    if duration <= 0:
+        return 100
+    return round(((reference - start).total_seconds() / duration) * 100)
+
+
+def _find_latest_schedule(folder_path: str) -> dict | None:
+    folder = Path(folder_path)
+    if not folder.exists() or not folder.is_dir():
+        raise RuntimeError("O caminho informado não é uma pasta acessível pelo servidor.")
+    files = []
+    for path in folder.iterdir():
+        if not path.is_file() or path.suffix.lower() not in PROJECT_EXTENSIONS:
+            continue
+        stat = path.stat()
+        files.append({"name": path.name, "path": str(path), "extension": path.suffix.lower(), "modifiedAt": datetime.fromtimestamp(stat.st_mtime), "size": stat.st_size})
+    files.sort(key=lambda item: item["modifiedAt"], reverse=True)
+    return files[0] if files else None
+
+
+def _find_custom_field_id(root: ET.Element, alias_text: str) -> str | None:
+    attributes = root.find("ExtendedAttributes")
+    for field in _project_children(attributes, "ExtendedAttribute"):
+        if alias_text.lower() in _project_text(field, "Alias").lower():
+            return _project_text(field, "FieldID")
+    return None
+
+
+def _task_extended_value(task: ET.Element, field_id: str | None) -> str | None:
+    if not field_id:
+        return None
+    for attribute in _project_children(task, "ExtendedAttribute"):
+        if _project_text(attribute, "FieldID") == str(field_id):
+            return _project_text(attribute, "Value")
+    return None
+
+
+def _project_tasks(root: ET.Element) -> list[ET.Element]:
+    tasks_root = root.find("Tasks")
+    return [task for task in _project_children(tasks_root, "Task") if _project_text(task, "Name")]
+
+
+def _project_summary_task(tasks: list[ET.Element]) -> ET.Element | None:
+    for task in tasks:
+        if _project_text(task, "ID") == "0":
+            return task
+    for task in tasks:
+        if _project_text(task, "Summary") == "1" and _project_text(task, "OutlineLevel") in {"0", "1"}:
+            return task
+    return None
+
+
+def summarize_xml_project(xml_text: str, file_info: dict) -> dict:
+    root = ET.fromstring(xml_text)
+    if "}" in root.tag:
+        for element in root.iter():
+            element.tag = element.tag.split("}", 1)[1]
+
+    tasks = _project_tasks(root)
+    summary_task = _project_summary_task(tasks)
+    planned_field_id = _find_custom_field_id(root, "planejado")
+    display_tasks = [task for task in tasks if _project_text(task, "ID") != "0"]
+    measurable_tasks = [task for task in display_tasks if _project_text(task, "Summary") != "1"]
+    usable_tasks = measurable_tasks or display_tasks
+    now = datetime.now()
+    attention_limit = _project_add_days(now, 7)
+
+    completed = in_progress = late = attention = 0
+    percent_total = planned_total = 0
+    earliest_start = latest_finish = None
+    task_rows = []
+
+    for task in display_tasks:
+        percent = _project_percent(_project_text(task, "PercentComplete"))
+        start = _project_date(_project_text(task, "Start"))
+        finish = _project_date(_project_text(task, "Finish"))
+        planned = _project_percent(_task_extended_value(task, planned_field_id), _planned_percent_by_date(start, finish, now))
+        is_summary = _project_text(task, "Summary") == "1"
+        is_complete = percent >= 100
+        is_in_progress = 0 < percent < 100
+        is_late = bool(finish and finish < now and not is_complete)
+        needs_attention = bool(not is_complete and (is_late or (finish and finish <= attention_limit)))
+
+        if not is_summary:
+            completed += 1 if is_complete else 0
+            in_progress += 1 if is_in_progress else 0
+            late += 1 if is_late else 0
+            attention += 1 if needs_attention else 0
+            percent_total += percent
+            planned_total += planned
+
+        if start and (earliest_start is None or start < earliest_start):
+            earliest_start = start
+        if finish and (latest_finish is None or finish > latest_finish):
+            latest_finish = finish
+
+        task_rows.append(
+            {
+                "id": _project_text(task, "ID") or _project_text(task, "UID"),
+                "name": _project_text(task, "Name") or "Sem nome",
+                "outlineLevel": int(_project_number(_project_text(task, "OutlineLevel"), 1)),
+                "outlineNumber": _project_text(task, "OutlineNumber"),
+                "summary": is_summary,
+                "start": _project_iso(start),
+                "finish": _project_iso(finish),
+                "percent": percent,
+                "plannedPercent": planned,
+                "inProgress": is_in_progress,
+                "late": is_late,
+                "attention": needs_attention,
+            }
+        )
+
+    total = len(usable_tasks)
+    avg_percent = round(percent_total / total) if total else 0
+    avg_planned = round(planned_total / total) if total else 0
+    realized = _project_percent(_project_text(summary_task, "PercentComplete"), avg_percent) if summary_task is not None else avg_percent
+    planned = _project_percent(_task_extended_value(summary_task, planned_field_id), avg_planned) if summary_task is not None else avg_planned
+
+    return {
+        "status": "parsed",
+        "sourceType": "xml",
+        "file": file_info,
+        "projectName": _project_text(root, "Name") or _project_text(root, "Title") or Path(file_info["name"]).stem,
+        "start": _project_iso(_project_date(_project_text(root, "StartDate")) or earliest_start),
+        "finish": _project_iso(_project_date(_project_text(root, "FinishDate")) or latest_finish),
+        "totalTasks": total,
+        "completedTasks": completed,
+        "inProgressTasks": in_progress,
+        "lateTasks": late,
+        "attentionTasks": attention,
+        "percentComplete": realized,
+        "plannedPercent": planned,
+        "realizedPercent": realized,
+        "variancePercent": realized - planned,
+        "tasks": task_rows,
+        "message": "Cronograma XML lido com sucesso." if total else "Arquivo XML encontrado, mas nenhuma tarefa foi identificada.",
+    }
+
+
+def inspect_project(project: dict) -> dict:
+    latest = _find_latest_schedule(str(project.get("folderPath", "")))
+    if not latest:
+        return {"status": "missing", "message": "Nenhum arquivo .xml, .mpp ou .mpt foi encontrado na pasta cadastrada."}
+
+    file_info = {
+        "name": latest["name"],
+        "path": latest["path"],
+        "extension": latest["extension"],
+        "modifiedAt": latest["modifiedAt"].isoformat(),
+        "size": latest["size"],
+    }
+    if latest["extension"] != ".xml":
+        return {
+            "status": "unsupported",
+            "sourceType": latest["extension"].replace(".", ""),
+            "file": file_info,
+            "message": "No app unificado, exporte o cronograma para XML para leitura automática. A conversão MPP/MPT será tratada em uma etapa separada.",
+        }
+
+    return summarize_xml_project(Path(latest["path"]).read_text(encoding="utf-8", errors="ignore"), file_info)
+
+
+def projects_payload() -> list[dict]:
+    enriched = []
+    for project in read_projects():
+        try:
+            enriched.append({**project, "dashboard": inspect_project(project)})
+        except Exception as exc:
+            enriched.append({**project, "dashboard": {"status": "error", "message": str(exc)}})
+    return enriched
+
+
 class Handler(BaseHTTPRequestHandler):
     def _send_json(self, payload: dict, status: int = 200) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -735,6 +1017,9 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/base":
             self._send_json(base_payload())
             return
+        if path == "/api/projects":
+            self._send_json(projects_payload())
+            return
         if path == "/api/fetch-222":
             params = parse_qs(urlparse(self.path).query)
             hours = int(params.get("hours", ["24"])[0] or "24")
@@ -756,6 +1041,9 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as exc:
                 self._send_json({"error": str(exc)}, 502)
             return
+        if path == "/projetos":
+            self._send_file(STATIC / "projects" / "index.html")
+            return
         if path == "/":
             self._send_file(STATIC / "index.html")
             return
@@ -770,12 +1058,38 @@ class Handler(BaseHTTPRequestHandler):
         self._send_file(target)
 
     def do_POST(self) -> None:
-        if self._route_path() != "/api/analyze":
+        path = self._route_path()
+        if path == "/api/projects":
+            try:
+                length = int(self.headers.get("Content-Length", "0") or "0")
+                payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+                name = str(payload.get("name", "")).strip()
+                folder_path = str(payload.get("folderPath", "")).strip()
+                if not name or not folder_path:
+                    self._send_json({"error": "Informe o nome do projeto e o caminho da pasta."}, 400)
+                    return
+                if not Path(folder_path).is_dir():
+                    self._send_json({"error": "O caminho informado não é uma pasta acessível pelo servidor."}, 400)
+                    return
+                projects = read_projects()
+                project = {
+                    "id": uuid.uuid4().hex,
+                    "name": name,
+                    "folderPath": folder_path,
+                    "createdAt": datetime.now().isoformat(timespec="seconds"),
+                }
+                projects.append(project)
+                write_projects(projects)
+                self._send_json({**project, "dashboard": inspect_project(project)}, 201)
+            except Exception as exc:
+                self._send_json({"error": str(exc)}, 400)
+            return
+
+        if path != "/api/analyze":
             self.send_error(404)
             return
 
-        form = cgi.FieldStorage(fp=self.rfile, headers=self.headers, environ={"REQUEST_METHOD": "POST"})
-        file_item = form["file"] if "file" in form else None
+        file_item = _read_uploaded_file(self.headers, self.rfile)
         if file_item is None or not getattr(file_item, "filename", ""):
             self._send_json({"error": "Envie um arquivo .xlsx."}, 400)
             return
@@ -795,6 +1109,16 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(base_payload({"import_result": import_result}))
         except Exception as exc:
             self._send_json({"error": f"Não consegui processar o arquivo: {exc}"}, 500)
+
+    def do_DELETE(self) -> None:
+        path = self._route_path()
+        if not path.startswith("/api/projects/"):
+            self.send_error(404)
+            return
+        project_id = path.rsplit("/", 1)[-1]
+        write_projects([project for project in read_projects() if str(project.get("id")) != project_id])
+        self.send_response(204)
+        self.end_headers()
 
     def _route_path(self) -> str:
         path = urlparse(self.path).path
