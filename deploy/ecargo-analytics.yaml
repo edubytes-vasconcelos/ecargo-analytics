@@ -61,6 +61,8 @@ spec:
               value: "600"
             - name: SYNC_LOOKBACK_HOURS
               value: "2"
+            - name: ECARGO_APPROVAL_DATE_FIELDS
+              value: "approval_time,approved_time,approve_time,approval_date,approved_date"
             - name: ECARGO_222_USER
               valueFrom:
                 secretKeyRef:

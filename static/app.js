@@ -349,7 +349,7 @@ function renderSupportView() {
   renderTable(
     "supportOpenTable",
     rows,
-    ["#", "SLA", "Horas aberto", "Horas para SLA", "Categoria", "Subcategoria", "Grupo", "Status", "Data de solicitação", "Título"],
+    ["#", "SLA", "Horas aberto", "Horas para SLA", "Início SLA", "Categoria", "Subcategoria", "Grupo", "Status", "Data de solicitação", "Título"],
     supportSlaRowClass,
     (row) => showDetails(`Chamado ${row["#"]}`, [row._source])
   );
@@ -359,13 +359,15 @@ function supportOpenRows(sourceRows) {
   return sourceRows
     .filter((row) => row["Situação gerencial"] === "Em aberto" && isSupportViewTicket(row))
     .map((row) => {
-      const hours = openHours(row);
+      const start = supportSlaStart(row);
+      const hours = openHoursFrom(start.value);
       const sla = supportSla(hours);
       return {
         "#": row["#"],
         SLA: sla.label,
         "Horas aberto": hours === null ? "" : fmt1.format(hours),
         "Horas para SLA": hours === null ? "" : fmt1.format(48 - hours),
+        "Início SLA": start.label,
         Categoria: row["Categoria de terceiro nível"] || "Não informado",
         Subcategoria: row.Subcategoria || "Não informado",
         Grupo: row["Grupo solucionador"] || "Não informado",
@@ -396,9 +398,22 @@ function isSupportViewTicket(row) {
 }
 
 function openHours(row) {
-  const opened = new Date(String(row["Data de solicitação"]).replace(" ", "T"));
+  return openHoursFrom(row["Data de solicitação"]);
+}
+
+function openHoursFrom(value) {
+  const opened = new Date(String(value || "").replace(" ", "T"));
   if (Number.isNaN(opened.getTime())) return null;
   return Math.max(0, (new Date() - opened) / 3600000);
+}
+
+function supportSlaStart(row) {
+  const category = normalizeFilterText(row["Categoria de terceiro nível"]);
+  const approval = row["Data de aprovação"];
+  if (category === "AJUSTE GERAL" && approval) {
+    return { value: approval, label: approval };
+  }
+  return { value: row["Data de solicitação"], label: row["Data de solicitação"] };
 }
 
 function supportSla(hours) {
@@ -876,7 +891,7 @@ function showDetails(title, rows) {
   panel.hidden = false;
   document.getElementById("detailTitle").textContent = title;
   document.getElementById("detailMeta").textContent = `${fmt.format(sorted.length)} chamados no detalhe selecionado.`;
-  renderTable("detailTable", detailRows(sorted), ["#", "Categoria", "Subcategoria", "Status", "Analista", "Data solicitação", "Data encerramento", "Tempo h", "Título"]);
+  renderTable("detailTable", detailRows(sorted), ["#", "Categoria", "Subcategoria", "Status", "Analista", "Data solicitação", "Data aprovação", "Data encerramento", "Tempo h", "Título"]);
   panel.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
@@ -893,6 +908,7 @@ function detailRows(rows) {
     Status: row.Status,
     Analista: row["Analista Responsável"],
     "Data solicitação": row["Data de solicitação"],
+    "Data aprovação": row["Data de aprovação"],
     "Data encerramento": row["Data de encerramento"],
     "Tempo h": row["Tempo atendimento (h)"] ?? "",
     Título: row["Título"],

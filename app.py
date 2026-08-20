@@ -52,6 +52,14 @@ TARGET_GROUP_ID = "24"
 TARGET_GROUP_NAME = "SUPORTE ECARGO"
 SYNC_INTERVAL_SECONDS = int(os.environ.get("SYNC_INTERVAL_SECONDS", "600"))
 SYNC_LOOKBACK_HOURS = int(os.environ.get("SYNC_LOOKBACK_HOURS", "2"))
+APPROVAL_DATE_FIELDS = [
+    field.strip()
+    for field in os.environ.get(
+        "ECARGO_APPROVAL_DATE_FIELDS",
+        "approval_time,approved_time,approve_time,approval_date,approved_date",
+    ).split(",")
+    if field.strip()
+]
 
 
 RAW_COLUMNS = [
@@ -69,6 +77,7 @@ RAW_COLUMNS = [
     "Usuário a ser Atendido",
     "Departamento",
     "Data de solicitação",
+    "Data de aprovação",
     "Data de encerramento",
     "Item Legal",
     "Causa:",
@@ -122,6 +131,7 @@ def _read_workbook(path: Path) -> pd.DataFrame:
 
 def _build_records(df: pd.DataFrame) -> list[dict]:
     opened = _parse_date(df["Data de solicitação"])
+    approved = _parse_date(df["Data de aprovação"])
     closed = _parse_date(df["Data de encerramento"])
     duration = ((closed - opened).dt.total_seconds() / 3600).round(1)
     iso = opened.dt.isocalendar()
@@ -151,6 +161,7 @@ def _build_records(df: pd.DataFrame) -> list[dict]:
                 "Situação gerencial": status_group,
                 "Tempo atendimento (h)": None if pd.isna(dur) else float(dur),
                 "Data de solicitação": open_dt.strftime("%Y-%m-%d %H:%M") if pd.notna(open_dt) else "",
+                "Data de aprovação": approved.loc[i].strftime("%Y-%m-%d %H:%M") if pd.notna(approved.loc[i]) else "",
                 "Data de encerramento": close_dt.strftime("%Y-%m-%d %H:%M") if pd.notna(close_dt) else "",
             }
         )
@@ -395,6 +406,14 @@ def _sysaid_date(info: dict[str, dict], key: str) -> str:
     return text
 
 
+def _sysaid_first_date(info: dict[str, dict], keys: list[str]) -> str:
+    for key in keys:
+        value = _sysaid_date(info, key)
+        if value:
+            return value
+    return ""
+
+
 def _sysaid_to_dataframe(items: list[dict]) -> pd.DataFrame:
     rows = []
     for item in items:
@@ -415,6 +434,7 @@ def _sysaid_to_dataframe(items: list[dict]) -> pd.DataFrame:
                 "Usuário a ser Atendido": _sysaid_caption(info, "request_user"),
                 "Departamento": _sysaid_caption(info, "department"),
                 "Data de solicitação": _sysaid_date(info, "insert_time"),
+                "Data de aprovação": _sysaid_first_date(info, APPROVAL_DATE_FIELDS),
                 "Data de encerramento": _sysaid_date(info, "close_time"),
                 "Item Legal": _sysaid_caption(info, "CustomColumn440sr"),
                 "Causa:": _sysaid_caption(info, "CustomColumn427sr"),
@@ -453,6 +473,7 @@ def _sysaid_field_sets() -> list[list[str]]:
             "status",
             "request_user",
             "insert_time",
+            *APPROVAL_DATE_FIELDS,
             "update_time",
             "description",
             "responsibility",
