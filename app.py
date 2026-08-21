@@ -880,8 +880,8 @@ def _uploaded_schedule_info(schedule: dict) -> dict | None:
 def _save_project_upload(file_item) -> dict:
     original_name = Path(str(getattr(file_item, "filename", "") or "")).name
     suffix = Path(original_name).suffix.lower()
-    if suffix not in PROJECT_EXTENSIONS:
-        raise RuntimeError("Formato inválido. Use .xml, .mpp ou .mpt.")
+    if suffix != ".xml":
+        raise RuntimeError("Formato inválido para upload. Exporte o cronograma do Project como XML e envie o arquivo .xml.")
 
     target = PROJECT_UPLOADS / f"{uuid.uuid4().hex}{suffix}"
     with target.open("wb") as fh:
@@ -1400,7 +1400,7 @@ class Handler(BaseHTTPRequestHandler):
                     self._send_json({"error": "Informe o nome do projeto."}, 400)
                     return
                 if file_item is None or not getattr(file_item, "filename", ""):
-                    self._send_json({"error": "Envie um cronograma .xml, .mpp ou .mpt."}, 400)
+                    self._send_json({"error": "Envie um cronograma .xml exportado do Project."}, 400)
                     return
 
                 uploaded = _save_project_upload(file_item)

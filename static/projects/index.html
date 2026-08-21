@@ -36,11 +36,11 @@
           </label>
           <label>
             Upload do cronograma
-            <input id="scheduleFile" name="scheduleFile" type="file" accept=".xml,.mpp,.mpt" />
+            <input id="scheduleFile" name="scheduleFile" type="file" accept=".xml" />
           </label>
           <button type="submit">Adicionar projeto</button>
         </form>
-        <p class="hint">Use uma pasta local, URL do SharePoint ou envie um arquivo `.xml`, `.mpp` ou `.mpt`. No app unificado, exporte o cronograma para XML para atualizar as métricas automaticamente.</p>
+        <p class="hint">Para upload manual, exporte o cronograma do Project como `.xml`. Pastas e SharePoint ainda podem localizar `.mpp/.mpt`, mas a leitura automática de métricas usa XML.</p>
       </section>
 
       <section aria-labelledby="dashboard-title">
@@ -139,6 +139,6 @@
       </div>
     </div>
 
-    <script src="__BASE_PATH__/projects/app.js?v=3"></script>
+    <script src="__BASE_PATH__/projects/app.js?v=4"></script>
   </body>
 </html>

@@ -447,6 +447,10 @@ form.addEventListener("submit", async (event) => {
   let response;
 
   if (file) {
+    if (!file.name.toLowerCase().endsWith(".xml")) {
+      alert("Para upload manual, exporte o cronograma do Project como XML e envie o arquivo .xml.");
+      return;
+    }
     const formData = new FormData();
     formData.append("name", name);
     formData.append("file", file);

@@ -96,4 +96,4 @@ Permissões recomendadas no Microsoft Graph:
 
 Depois disso, no cadastro do projeto, use a URL da pasta ou do arquivo no SharePoint. Se a URL apontar para uma pasta/biblioteca, o app seleciona o arquivo `.xml`, `.mpp` ou `.mpt` mais recente. Se apontar diretamente para um arquivo, ele usa esse arquivo. A leitura automática de métricas continua exigindo XML.
 
-Enquanto a permissão de SharePoint não estiver liberada, a tela de Projetos aceita upload manual de um cronograma `.xml`, `.mpp` ou `.mpt`. O arquivo fica salvo no volume persistente em `DATA_DIR/project_uploads`; para leitura automática de métricas, use XML.
+Enquanto a permissão de SharePoint não estiver liberada, a tela de Projetos aceita upload manual de um cronograma `.xml` exportado do Project. O arquivo fica salvo no volume persistente em `DATA_DIR/project_uploads`. Arquivos `.mpp/.mpt` podem ser localizados em pasta ou SharePoint, mas a leitura automática de métricas usa XML.
