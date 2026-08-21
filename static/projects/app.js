@@ -482,8 +482,8 @@ form.addEventListener("submit", async (event) => {
   }
 
   form.reset();
-  selectedProjectId = body.id;
-  localStorage.setItem("selectedProjectId", body.id);
+  selectedProjectId = null;
+  localStorage.removeItem("selectedProjectId");
   await loadProjects();
 });
 
