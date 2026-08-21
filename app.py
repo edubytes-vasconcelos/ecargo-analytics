@@ -769,7 +769,7 @@ def start_background_sync() -> None:
 
 
 PROJECT_EXTENSIONS = {".xml", ".mpp", ".mpt"}
-DEFAULT_PROJECT_SETTINGS = {"attentionDays": 7, "negativeVarianceAttention": True}
+DEFAULT_PROJECT_SETTINGS = {"attentionDelayPercent": 10, "negativeVarianceAttention": False}
 
 
 def ensure_projects_store() -> None:
@@ -797,15 +797,15 @@ def read_project_settings() -> dict:
     except json.JSONDecodeError:
         settings = {}
     merged = {**DEFAULT_PROJECT_SETTINGS, **settings}
-    merged["attentionDays"] = max(0, min(int(merged.get("attentionDays", 7) or 0), 90))
-    merged["negativeVarianceAttention"] = bool(merged.get("negativeVarianceAttention", True))
+    merged["attentionDelayPercent"] = max(0, min(int(merged.get("attentionDelayPercent", 10) or 0), 100))
+    merged["negativeVarianceAttention"] = bool(merged.get("negativeVarianceAttention", False))
     return merged
 
 
 def write_project_settings(settings: dict) -> dict:
     current = read_project_settings()
-    if "attentionDays" in settings:
-        current["attentionDays"] = max(0, min(int(settings.get("attentionDays") or 0), 90))
+    if "attentionDelayPercent" in settings:
+        current["attentionDelayPercent"] = max(0, min(int(settings.get("attentionDelayPercent") or 0), 100))
     if "negativeVarianceAttention" in settings:
         current["negativeVarianceAttention"] = bool(settings.get("negativeVarianceAttention"))
     PROJECT_SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -1274,7 +1274,7 @@ def summarize_xml_project(xml_text: str, file_info: dict, settings: dict | None 
     measurable_tasks = [task for task in display_tasks if _project_text(task, "Summary") != "1"]
     usable_tasks = measurable_tasks or display_tasks
     now = datetime.now()
-    attention_limit = _project_add_days(now, int(settings.get("attentionDays", 7)))
+    attention_delay_percent = int(settings.get("attentionDelayPercent", 10))
 
     completed = in_progress = late = attention = 0
     percent_total = planned_total = 0
@@ -1290,7 +1290,8 @@ def summarize_xml_project(xml_text: str, file_info: dict, settings: dict | None 
         is_complete = percent >= 100
         is_in_progress = 0 < percent < 100
         is_late = bool(finish and finish < now and not is_complete)
-        needs_attention = bool(not is_complete and (is_late or (finish and finish <= attention_limit)))
+        delay_percent = max(0, planned - percent)
+        needs_attention = bool(not is_complete and not is_late and delay_percent >= attention_delay_percent)
 
         if not is_summary:
             completed += 1 if is_complete else 0
@@ -1316,6 +1317,7 @@ def summarize_xml_project(xml_text: str, file_info: dict, settings: dict | None 
                 "finish": _project_iso(finish),
                 "percent": percent,
                 "plannedPercent": planned,
+                "delayPercent": delay_percent,
                 "inProgress": is_in_progress,
                 "late": is_late,
                 "attention": needs_attention,
@@ -1355,7 +1357,7 @@ def inspect_project(project: dict, settings: dict | None = None) -> dict:
             "status": "study",
             "message": "Projeto em estudo, sem cronograma vinculado.",
             "sourceType": "study",
-            "attentionDays": int((settings or read_project_settings()).get("attentionDays", 7)),
+            "attentionDelayPercent": int((settings or read_project_settings()).get("attentionDelayPercent", 10)),
         }
 
     settings = settings or read_project_settings()
@@ -1407,7 +1409,7 @@ def inspect_project(project: dict, settings: dict | None = None) -> dict:
     result = summarize_xml_project(xml_text, file_info, settings)
     if result["file"].get("convertedFrom"):
         result["message"] = "Cronograma convertido para XML e lido com sucesso."
-    result["attentionDays"] = int(settings.get("attentionDays", 7))
+    result["attentionDelayPercent"] = int(settings.get("attentionDelayPercent", 10))
     return result
 
 

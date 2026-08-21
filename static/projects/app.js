@@ -22,14 +22,14 @@ const notesModal = document.querySelector("#notesModal");
 const projectNotes = document.querySelector("#projectNotes");
 const closeNotesButton = document.querySelector("#closeNotesButton");
 const saveNotesButton = document.querySelector("#saveNotesButton");
-const attentionDaysInput = document.querySelector("#attentionDaysInput");
+const attentionDelayInput = document.querySelector("#attentionDelayInput");
 const negativeVarianceInput = document.querySelector("#negativeVarianceInput");
 const criteriaDescription = document.querySelector("#criteriaDescription");
 const projectUiState = new Map();
 const appBasePath = document.documentElement.dataset.basePath || "";
 
 let projectsCache = [];
-let projectSettings = { attentionDays: 7, negativeVarianceAttention: true };
+let projectSettings = { attentionDelayPercent: 10, negativeVarianceAttention: false };
 let notesProjectId = null;
 let selectedProjectId = localStorage.getItem("selectedProjectId") || null;
 
@@ -163,10 +163,10 @@ function projectRiskLabel(dashboard, variance) {
 }
 
 function updateCriteriaText() {
-  const days = Number(projectSettings.attentionDays ?? 7);
-  attentionDaysInput.value = days;
+  const delay = Number(projectSettings.attentionDelayPercent ?? 10);
+  attentionDelayInput.value = delay;
   negativeVarianceInput.checked = Boolean(projectSettings.negativeVarianceAttention);
-  criteriaDescription.textContent = `Tarefas não concluídas com término em até ${days} dia${days === 1 ? "" : "s"} entram em atenção. Atrasos têm prioridade sobre atenção${projectSettings.negativeVarianceAttention ? ", e desvio negativo também gera atenção." : "."}`;
+  criteriaDescription.textContent = `Tarefas não concluídas entram em atenção quando o realizado fica ${delay} p.p. ou mais abaixo do planejado. Atrasos por data continuam como Atrasado${projectSettings.negativeVarianceAttention ? ", e desvio geral negativo também gera atenção no card." : "."}`;
 }
 
 function formatPercent(value) {
@@ -283,6 +283,7 @@ function renderTasks(container, tasks = [], state = { filter: "all", collapsed: 
         <th>Término</th>
         <th>Planejado</th>
         <th>Realizado</th>
+        <th>Atraso</th>
         <th>Status</th>
       </tr>
     </thead>
@@ -317,6 +318,7 @@ function renderTasks(container, tasks = [], state = { filter: "all", collapsed: 
       <td>${formatDate(task.finish)}</td>
       <td>${task.plannedPercent ?? "-"}%</td>
       <td><b>${task.percent}%</b></td>
+      <td>${task.delayPercent ?? 0} p.p.</td>
       <td><em class="status-pill ${task.late ? "danger" : task.attention ? "attention" : task.inProgress ? "progress" : task.percent >= 100 ? "done" : ""}">${status}</em></td>
     `;
 
@@ -582,7 +584,7 @@ studyForm.addEventListener("submit", async (event) => {
 settingsForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const payload = {
-    attentionDays: Number(attentionDaysInput.value || 0),
+    attentionDelayPercent: Number(attentionDelayInput.value || 0),
     negativeVarianceAttention: negativeVarianceInput.checked,
   };
   const response = await fetch(`${appBasePath}/api/project-settings`, {
