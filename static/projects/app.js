@@ -1,6 +1,14 @@
 const projectsEl = document.querySelector("#projects");
 const detailTemplate = document.querySelector("#projectTemplate");
 const form = document.querySelector("#projectForm");
+const projectFormPanel = document.querySelector("#projectFormPanel");
+const studyFormPanel = document.querySelector("#studyFormPanel");
+const studyForm = document.querySelector("#studyForm");
+const settingsForm = document.querySelector("#settingsForm");
+const showProjectFormButton = document.querySelector("#showProjectFormButton");
+const hideProjectFormButton = document.querySelector("#hideProjectFormButton");
+const showStudyFormButton = document.querySelector("#showStudyFormButton");
+const hideStudyFormButton = document.querySelector("#hideStudyFormButton");
 const refreshButton = document.querySelector("#refreshButton");
 const lastUpdate = document.querySelector("#lastUpdate");
 const dashboardTitle = document.querySelector("#dashboard-title");
@@ -10,10 +18,19 @@ const reportBody = document.querySelector("#reportBody");
 const copyReportButton = document.querySelector("#copyReportButton");
 const closeReportButton = document.querySelector("#closeReportButton");
 const mailtoReportLink = document.querySelector("#mailtoReportLink");
+const notesModal = document.querySelector("#notesModal");
+const projectNotes = document.querySelector("#projectNotes");
+const closeNotesButton = document.querySelector("#closeNotesButton");
+const saveNotesButton = document.querySelector("#saveNotesButton");
+const attentionDaysInput = document.querySelector("#attentionDaysInput");
+const negativeVarianceInput = document.querySelector("#negativeVarianceInput");
+const criteriaDescription = document.querySelector("#criteriaDescription");
 const projectUiState = new Map();
 const appBasePath = document.documentElement.dataset.basePath || "";
 
 let projectsCache = [];
+let projectSettings = { attentionDays: 7, negativeVarianceAttention: true };
+let notesProjectId = null;
 let selectedProjectId = localStorage.getItem("selectedProjectId") || null;
 
 function formatDate(value, withTime = false) {
@@ -125,20 +142,31 @@ function getDashboardNumbers(project) {
   return { dashboard, realized, planned, variance, selectedFile };
 }
 
+function isStudyProject(project) {
+  return project.type === "study";
+}
+
 function projectSource(project) {
   return project.uploadedSchedule?.name || project.sharepointUrl || project.folderPath || "";
 }
 
 function projectRiskClass(dashboard, variance) {
   if ((dashboard.lateTasks ?? 0) > 0) return "late";
-  if ((dashboard.attentionTasks ?? 0) > 0 || variance < 0) return "risk";
+  if ((dashboard.attentionTasks ?? 0) > 0 || (projectSettings.negativeVarianceAttention && variance < 0)) return "risk";
   return "ok";
 }
 
 function projectRiskLabel(dashboard, variance) {
   if ((dashboard.lateTasks ?? 0) > 0) return "Atrasado";
-  if ((dashboard.attentionTasks ?? 0) > 0 || variance < 0) return "Atenção";
+  if ((dashboard.attentionTasks ?? 0) > 0 || (projectSettings.negativeVarianceAttention && variance < 0)) return "Atenção";
   return "Em dia";
+}
+
+function updateCriteriaText() {
+  const days = Number(projectSettings.attentionDays ?? 7);
+  attentionDaysInput.value = days;
+  negativeVarianceInput.checked = Boolean(projectSettings.negativeVarianceAttention);
+  criteriaDescription.textContent = `Tarefas não concluídas com término em até ${days} dia${days === 1 ? "" : "s"} entram em atenção. Atrasos têm prioridade sobre atenção${projectSettings.negativeVarianceAttention ? ", e desvio negativo também gera atenção." : "."}`;
 }
 
 function formatPercent(value) {
@@ -208,6 +236,12 @@ function openStatusReport(project) {
   reportBody.value = report.body;
   mailtoReportLink.href = `mailto:?subject=${encodeURIComponent(report.subject)}&body=${encodeURIComponent(report.body)}`;
   reportModal.hidden = false;
+}
+
+function openNotes(project) {
+  notesProjectId = project.id;
+  projectNotes.value = project.notes || "";
+  notesModal.hidden = false;
 }
 
 function renderTaskFilters(container, state, onChange) {
@@ -308,9 +342,31 @@ function renderDashboard(projects) {
   }
 
   for (const project of projects) {
+    if (isStudyProject(project)) {
+      const card = document.createElement("article");
+      card.className = "summary-card study";
+      card.innerHTML = `
+        <div class="summary-head">
+          <div>
+            <h3>${escapeHtml(project.name)}</h3>
+            <p>${escapeHtml(project.description || "Sem descrição informada.")}</p>
+          </div>
+          <span class="summary-status study">Em estudo</span>
+        </div>
+        <div class="note-preview">${escapeHtml(project.description || "Projeto em estudo aguardando definição de escopo, cronograma ou priorização.")}</div>
+        <div class="summary-actions">
+          <button type="button" data-action="delete">Excluir</button>
+        </div>
+      `;
+      card.querySelector("[data-action='delete']").addEventListener("click", () => deleteProject(project.id));
+      projectsEl.appendChild(card);
+      continue;
+    }
+
     const { dashboard, realized, planned, variance, selectedFile } = getDashboardNumbers(project);
     const card = document.createElement("article");
     const riskClass = projectRiskClass(dashboard, variance);
+    const notes = String(project.notes || "").trim();
     card.className = `summary-card ${riskClass}`;
     card.innerHTML = `
       <div class="summary-head">
@@ -325,17 +381,17 @@ function renderDashboard(projects) {
         <div><span>Realizado</span><strong>${realized}%</strong></div>
         <div><span>Desvio</span><strong>${variance > 0 ? "+" : ""}${variance} p.p.</strong></div>
       </div>
-      <div class="summary-counts">
-        <span>${dashboard.attentionTasks ?? "-"} atenção</span>
-        <span>${dashboard.lateTasks ?? "-"} atrasadas</span>
-        <span>${dashboard.inProgressTasks ?? "-"} em andamento</span>
-      </div>
+      ${notes ? `<div class="note-preview">${escapeHtml(notes)}</div>` : ""}
       <div class="summary-progress">
         <span style="width:${Math.max(0, Math.min(100, realized))}%"></span>
       </div>
-      <button type="button" data-action="open">Abrir projeto</button>
+      <div class="summary-actions">
+        <button type="button" data-action="open">Abrir projeto</button>
+        <button type="button" data-action="notes">Informações</button>
+      </div>
     `;
     card.querySelector("[data-action='open']").addEventListener("click", () => openProject(project.id));
+    card.querySelector("[data-action='notes']").addEventListener("click", () => openNotes(project));
     projectsEl.appendChild(card);
   }
 }
@@ -378,6 +434,7 @@ function renderProjectDetail(project) {
   node.querySelector("[data-action='back']").addEventListener("click", showDashboard);
   node.querySelector("[data-action='delete']").addEventListener("click", () => deleteProject(project.id));
   node.querySelector("[data-action='report']").addEventListener("click", () => openStatusReport(project));
+  node.querySelector("[data-action='notes']").addEventListener("click", () => openNotes(project));
 
   const taskContainer = node.querySelector("[data-field='tasks']");
   const filtersContainer = node.querySelector("[data-field='taskFilters']");
@@ -392,7 +449,7 @@ function renderProjectDetail(project) {
 
 function renderCurrentView() {
   const selectedProject = projectsCache.find((project) => project.id === selectedProjectId);
-  if (selectedProject) {
+  if (selectedProject && !isStudyProject(selectedProject)) {
     renderProjectDetail(selectedProject);
     return;
   }
@@ -430,6 +487,8 @@ async function loadProjects() {
 }
 
 async function deleteProject(id) {
+  const project = projectsCache.find((item) => item.id === id);
+  if (!window.confirm(`Excluir ${project?.name || "este projeto"}?`)) return;
   await fetch(`${appBasePath}/api/projects/${id}`, { method: "DELETE" });
   if (selectedProjectId === id) {
     selectedProjectId = null;
@@ -437,6 +496,16 @@ async function deleteProject(id) {
   }
   projectUiState.delete(id);
   await loadProjects();
+}
+
+async function loadSettings() {
+  try {
+    const response = await fetch(`${appBasePath}/api/project-settings`);
+    if (!response.ok) return;
+    projectSettings = await response.json();
+  } finally {
+    updateCriteriaText();
+  }
 }
 
 form.addEventListener("submit", async (event) => {
@@ -487,9 +556,88 @@ form.addEventListener("submit", async (event) => {
   await loadProjects();
 });
 
+studyForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const payload = {
+    title: document.querySelector("#studyTitle").value.trim(),
+    description: document.querySelector("#studyDescription").value.trim(),
+  };
+  const response = await fetch(`${appBasePath}/api/projects/study`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    alert(body.error || "Nao foi possivel cadastrar o projeto em estudo.");
+    return;
+  }
+  studyForm.reset();
+  studyFormPanel.hidden = true;
+  selectedProjectId = null;
+  localStorage.removeItem("selectedProjectId");
+  await loadProjects();
+});
+
+settingsForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const payload = {
+    attentionDays: Number(attentionDaysInput.value || 0),
+    negativeVarianceAttention: negativeVarianceInput.checked,
+  };
+  const response = await fetch(`${appBasePath}/api/project-settings`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    alert(body.error || "Nao foi possivel salvar o critério.");
+    return;
+  }
+  projectSettings = body;
+  updateCriteriaText();
+  await loadProjects();
+});
+
+showProjectFormButton.addEventListener("click", () => {
+  projectFormPanel.hidden = false;
+  studyFormPanel.hidden = true;
+});
+hideProjectFormButton.addEventListener("click", () => {
+  projectFormPanel.hidden = true;
+});
+showStudyFormButton.addEventListener("click", () => {
+  studyFormPanel.hidden = false;
+  projectFormPanel.hidden = true;
+});
+hideStudyFormButton.addEventListener("click", () => {
+  studyFormPanel.hidden = true;
+});
+
 refreshButton.addEventListener("click", loadProjects);
 closeReportButton.addEventListener("click", () => {
   reportModal.hidden = true;
+});
+closeNotesButton.addEventListener("click", () => {
+  notesModal.hidden = true;
+  notesProjectId = null;
+});
+saveNotesButton.addEventListener("click", async () => {
+  if (!notesProjectId) return;
+  const response = await fetch(`${appBasePath}/api/projects/${notesProjectId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ notes: projectNotes.value }),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    alert(body.error || "Nao foi possivel salvar as informações.");
+    return;
+  }
+  notesModal.hidden = true;
+  notesProjectId = null;
+  await loadProjects();
 });
 copyReportButton.addEventListener("click", async () => {
   await navigator.clipboard.writeText(`${reportSubject.value}\n\n${reportBody.value}`);
@@ -498,5 +646,7 @@ copyReportButton.addEventListener("click", async () => {
     copyReportButton.textContent = "Copiar e-mail";
   }, 1600);
 });
-loadProjects();
+loadSettings()
+  .catch(() => updateCriteriaText())
+  .then(loadProjects);
 setInterval(loadProjects, 60000);

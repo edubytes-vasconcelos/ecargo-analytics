@@ -154,6 +154,19 @@ h1 {
   gap: 10px;
 }
 
+.dashboard-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.dashboard-actions button:last-child {
+  border-color: var(--line);
+  background: var(--panel);
+  color: var(--brand-dark);
+}
+
 .nav-link {
   display: none;
 }
@@ -178,6 +191,81 @@ main {
   border-left: 6px solid var(--green);
 }
 
+[hidden] {
+  display: none !important;
+}
+
+.panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.panel-heading button {
+  min-height: 32px;
+  border-color: var(--line);
+  background: var(--panel-soft);
+  color: var(--ink);
+}
+
+.study-panel {
+  border-left-color: var(--blue);
+}
+
+.criteria-panel {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 18px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-left: 6px solid var(--amber);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 8px 20px rgba(26, 39, 52, 0.04);
+}
+
+.criteria-panel p {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.settings-form {
+  display: flex;
+  align-items: end;
+  gap: 10px;
+  margin: 0;
+}
+
+.settings-form label {
+  min-width: 90px;
+}
+
+.settings-form input[type="number"] {
+  width: 86px;
+}
+
+.check-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 230px;
+}
+
+.check-field input {
+  width: 16px;
+  min-height: 16px;
+}
+
+.check-field span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
 h2 {
   font-size: 16px;
 }
@@ -188,6 +276,10 @@ form {
   gap: 12px;
   align-items: end;
   margin: 14px 0 10px;
+}
+
+.study-form {
+  grid-template-columns: minmax(220px, 0.5fr) minmax(260px, 1fr) auto;
 }
 
 label {
@@ -265,6 +357,10 @@ textarea {
   border-top-color: var(--green);
 }
 
+.summary-card.study {
+  border-top-color: var(--blue);
+}
+
 .summary-head,
 .card-header,
 .task-title,
@@ -310,6 +406,11 @@ textarea {
 .summary-status.error {
   background: #feecec;
   color: var(--red);
+}
+
+.summary-status.study {
+  background: #eef6fb;
+  color: var(--blue);
 }
 
 .summary-kpis,
@@ -365,6 +466,42 @@ dt {
   padding: 6px 8px;
 }
 
+.note-preview {
+  margin-top: 12px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfd;
+  color: #42515d;
+  font-size: 13px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.summary-actions {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.summary-actions button {
+  width: 100%;
+}
+
+.summary-actions button[data-action="notes"] {
+  border-color: var(--line);
+  background: var(--panel-soft);
+  color: var(--brand-dark);
+}
+
+.summary-actions button[data-action="delete"],
+.header-actions button[data-action="delete"] {
+  border-color: #f0c2c2;
+  background: #fff5f5;
+  color: var(--red);
+}
+
 .summary-progress,
 .progress-bar {
   overflow: hidden;
@@ -382,10 +519,6 @@ dt {
   display: block;
   height: 100%;
   background: var(--brand);
-}
-
-.summary-card button {
-  width: 100%;
 }
 
 .project-card {
@@ -734,12 +867,18 @@ dd {
 
 @media (max-width: 1180px) {
   .topbar,
-  form {
+  form,
+  .criteria-panel {
     grid-template-columns: 1fr;
   }
 
   .top-actions {
     justify-content: flex-start;
+  }
+
+  .settings-form {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 
@@ -768,5 +907,15 @@ dd {
   .portal-nav,
   .top-actions {
     width: 100%;
+  }
+
+  .dashboard-actions,
+  .summary-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-actions,
+  .settings-form {
+    display: grid;
   }
 }

@@ -23,8 +23,16 @@
     </header>
 
     <main>
-      <section class="register-panel" aria-labelledby="register-title">
-        <h2 id="register-title">Novo acompanhamento</h2>
+      <section class="dashboard-actions" aria-label="Ações de projetos">
+        <button id="showProjectFormButton" type="button">Cadastrar projeto</button>
+        <button id="showStudyFormButton" type="button">Cadastrar projeto em estudo</button>
+      </section>
+
+      <section id="projectFormPanel" class="register-panel" aria-labelledby="register-title" hidden>
+        <div class="panel-heading">
+          <h2 id="register-title">Cadastrar projeto</h2>
+          <button id="hideProjectFormButton" type="button">Fechar</button>
+        </div>
         <form id="projectForm">
           <label>
             Nome do projeto
@@ -41,6 +49,42 @@
           <button type="submit">Adicionar projeto</button>
         </form>
         <p class="hint">Envie `.xml`, `.mpp` ou `.mpt`. Arquivos do Project são convertidos para XML automaticamente antes da leitura das métricas.</p>
+      </section>
+
+      <section id="studyFormPanel" class="register-panel study-panel" aria-labelledby="study-title" hidden>
+        <div class="panel-heading">
+          <h2 id="study-title">Cadastrar projeto em estudo</h2>
+          <button id="hideStudyFormButton" type="button">Fechar</button>
+        </div>
+        <form id="studyForm" class="study-form">
+          <label>
+            Título
+            <input id="studyTitle" name="title" autocomplete="off" required />
+          </label>
+          <label>
+            Descrição
+            <textarea id="studyDescription" name="description" rows="3"></textarea>
+          </label>
+          <button type="submit">Adicionar estudo</button>
+        </form>
+      </section>
+
+      <section class="criteria-panel" aria-labelledby="criteria-title">
+        <div>
+          <h2 id="criteria-title">Critério de atenção</h2>
+          <p id="criteriaDescription">Tarefas não concluídas com término próximo entram em atenção. Atrasos têm prioridade sobre atenção.</p>
+        </div>
+        <form id="settingsForm" class="settings-form">
+          <label>
+            Janela
+            <input id="attentionDaysInput" type="number" min="0" max="90" step="1" />
+          </label>
+          <label class="check-field">
+            <input id="negativeVarianceInput" type="checkbox" />
+            <span>Desvio negativo também gera atenção</span>
+          </label>
+          <button type="submit">Salvar critério</button>
+        </form>
       </section>
 
       <section aria-labelledby="dashboard-title">
@@ -61,8 +105,9 @@
           </div>
           <div class="header-actions">
             <button type="button" data-action="report" title="Gerar e-mail de status">Gerar status report</button>
+            <button type="button" data-action="notes" title="Adicionar informações do projeto">Informações</button>
             <button type="button" data-action="back" title="Voltar para o dashboard">Voltar</button>
-            <button type="button" data-action="delete" title="Remover projeto">Remover</button>
+            <button type="button" data-action="delete" title="Excluir projeto">Excluir</button>
           </div>
         </div>
         <div class="status-line" data-field="message"></div>
@@ -139,6 +184,22 @@
       </div>
     </div>
 
-    <script src="__BASE_PATH__/projects/app.js?v=6"></script>
+    <div id="notesModal" class="modal" hidden>
+      <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="notesTitle">
+        <div class="modal-header">
+          <h2 id="notesTitle">Informações do projeto</h2>
+          <button id="closeNotesButton" type="button" title="Fechar">Fechar</button>
+        </div>
+        <label>
+          Observações
+          <textarea id="projectNotes" rows="10"></textarea>
+        </label>
+        <div class="modal-actions">
+          <button id="saveNotesButton" type="button">Salvar informações</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="__BASE_PATH__/projects/app.js?v=7"></script>
   </body>
 </html>

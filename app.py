@@ -37,6 +37,7 @@ DATA_DIR = Path(os.environ.get("DATA_DIR", ROOT / "work"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = Path(os.environ.get("DB_PATH", DATA_DIR / "ecargo.sqlite"))
 PROJECTS_FILE = Path(os.environ.get("PROJECTS_FILE", DATA_DIR / "projects.json"))
+PROJECT_SETTINGS_FILE = Path(os.environ.get("PROJECT_SETTINGS_FILE", DATA_DIR / "project_settings.json"))
 PROJECT_UPLOADS = DATA_DIR / "project_uploads"
 PROJECT_UPLOADS.mkdir(parents=True, exist_ok=True)
 LEGACY_REPO = ROOT / "chamados222pendencias.exe-master" / "chamados222pendencias.exe-master"
@@ -768,6 +769,7 @@ def start_background_sync() -> None:
 
 
 PROJECT_EXTENSIONS = {".xml", ".mpp", ".mpt"}
+DEFAULT_PROJECT_SETTINGS = {"attentionDays": 7, "negativeVarianceAttention": True}
 
 
 def ensure_projects_store() -> None:
@@ -784,6 +786,31 @@ def read_projects() -> list[dict]:
 def write_projects(projects: list[dict]) -> None:
     ensure_projects_store()
     PROJECTS_FILE.write_text(json.dumps(projects, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def read_project_settings() -> dict:
+    PROJECT_SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    if not PROJECT_SETTINGS_FILE.exists():
+        PROJECT_SETTINGS_FILE.write_text(json.dumps(DEFAULT_PROJECT_SETTINGS, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    try:
+        settings = json.loads(PROJECT_SETTINGS_FILE.read_text(encoding="utf-8") or "{}")
+    except json.JSONDecodeError:
+        settings = {}
+    merged = {**DEFAULT_PROJECT_SETTINGS, **settings}
+    merged["attentionDays"] = max(0, min(int(merged.get("attentionDays", 7) or 0), 90))
+    merged["negativeVarianceAttention"] = bool(merged.get("negativeVarianceAttention", True))
+    return merged
+
+
+def write_project_settings(settings: dict) -> dict:
+    current = read_project_settings()
+    if "attentionDays" in settings:
+        current["attentionDays"] = max(0, min(int(settings.get("attentionDays") or 0), 90))
+    if "negativeVarianceAttention" in settings:
+        current["negativeVarianceAttention"] = bool(settings.get("negativeVarianceAttention"))
+    PROJECT_SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    PROJECT_SETTINGS_FILE.write_text(json.dumps(current, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return current
 
 
 def _project_text(node: ET.Element | None, name: str) -> str:
@@ -1233,7 +1260,8 @@ def _project_summary_task(tasks: list[ET.Element]) -> ET.Element | None:
     return None
 
 
-def summarize_xml_project(xml_text: str, file_info: dict) -> dict:
+def summarize_xml_project(xml_text: str, file_info: dict, settings: dict | None = None) -> dict:
+    settings = settings or read_project_settings()
     root = ET.fromstring(xml_text)
     if "}" in root.tag:
         for element in root.iter():
@@ -1246,7 +1274,7 @@ def summarize_xml_project(xml_text: str, file_info: dict) -> dict:
     measurable_tasks = [task for task in display_tasks if _project_text(task, "Summary") != "1"]
     usable_tasks = measurable_tasks or display_tasks
     now = datetime.now()
-    attention_limit = _project_add_days(now, 7)
+    attention_limit = _project_add_days(now, int(settings.get("attentionDays", 7)))
 
     completed = in_progress = late = attention = 0
     percent_total = planned_total = 0
@@ -1321,7 +1349,16 @@ def summarize_xml_project(xml_text: str, file_info: dict) -> dict:
     }
 
 
-def inspect_project(project: dict) -> dict:
+def inspect_project(project: dict, settings: dict | None = None) -> dict:
+    if project.get("type") == "study":
+        return {
+            "status": "study",
+            "message": "Projeto em estudo, sem cronograma vinculado.",
+            "sourceType": "study",
+            "attentionDays": int((settings or read_project_settings()).get("attentionDays", 7)),
+        }
+
+    settings = settings or read_project_settings()
     uploaded_schedule = project.get("uploadedSchedule") or {}
     sharepoint_url = str(project.get("sharepointUrl", "")).strip()
     if uploaded_schedule:
@@ -1367,17 +1404,19 @@ def inspect_project(project: dict) -> dict:
         }
         xml_text = Path(converted["path"]).read_text(encoding="utf-8", errors="ignore")
 
-    result = summarize_xml_project(xml_text, file_info)
+    result = summarize_xml_project(xml_text, file_info, settings)
     if result["file"].get("convertedFrom"):
         result["message"] = "Cronograma convertido para XML e lido com sucesso."
+    result["attentionDays"] = int(settings.get("attentionDays", 7))
     return result
 
 
 def projects_payload() -> list[dict]:
+    settings = read_project_settings()
     enriched = []
     for project in read_projects():
         try:
-            enriched.append({**project, "dashboard": inspect_project(project)})
+            enriched.append({**project, "dashboard": inspect_project(project, settings)})
         except Exception as exc:
             enriched.append({**project, "dashboard": {"status": "error", "message": str(exc)}})
     return enriched
@@ -1417,6 +1456,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/projects":
             self._send_json(projects_payload())
+            return
+        if path == "/api/project-settings":
+            self._send_json(read_project_settings())
             return
         if path == "/api/fetch-222":
             params = parse_qs(urlparse(self.path).query)
@@ -1518,6 +1560,39 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json({"error": str(exc)}, 400)
             return
 
+        if path == "/api/projects/study":
+            try:
+                length = int(self.headers.get("Content-Length", "0") or "0")
+                payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+                title = str(payload.get("title", "")).strip()
+                description = str(payload.get("description", "")).strip()
+                if not title:
+                    self._send_json({"error": "Informe o título do projeto em estudo."}, 400)
+                    return
+                projects = read_projects()
+                project = {
+                    "id": uuid.uuid4().hex,
+                    "type": "study",
+                    "name": title,
+                    "description": description,
+                    "createdAt": datetime.now().isoformat(timespec="seconds"),
+                }
+                projects.append(project)
+                write_projects(projects)
+                self._send_json({**project, "dashboard": inspect_project(project)}, 201)
+            except Exception as exc:
+                self._send_json({"error": str(exc)}, 400)
+            return
+
+        if path == "/api/project-settings":
+            try:
+                length = int(self.headers.get("Content-Length", "0") or "0")
+                payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+                self._send_json(write_project_settings(payload))
+            except Exception as exc:
+                self._send_json({"error": str(exc)}, 400)
+            return
+
         if path != "/api/analyze":
             self.send_error(404)
             return
@@ -1542,6 +1617,42 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(base_payload({"import_result": import_result}))
         except Exception as exc:
             self._send_json({"error": f"Não consegui processar o arquivo: {exc}"}, 500)
+
+    def do_PATCH(self) -> None:
+        path = self._route_path()
+        if not path.startswith("/api/projects/"):
+            self.send_error(404)
+            return
+        project_id = path.rsplit("/", 1)[-1]
+        try:
+            length = int(self.headers.get("Content-Length", "0") or "0")
+            payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+            projects = read_projects()
+            updated = None
+            for project in projects:
+                if str(project.get("id")) != project_id:
+                    continue
+                if "notes" in payload:
+                    project["notes"] = str(payload.get("notes", "")).strip()
+                if project.get("type") == "study":
+                    if "title" in payload:
+                        title = str(payload.get("title", "")).strip()
+                        if not title:
+                            self._send_json({"error": "Informe o título do projeto em estudo."}, 400)
+                            return
+                        project["name"] = title
+                    if "description" in payload:
+                        project["description"] = str(payload.get("description", "")).strip()
+                project["updatedAt"] = datetime.now().isoformat(timespec="seconds")
+                updated = project
+                break
+            if updated is None:
+                self._send_json({"error": "Projeto não encontrado."}, 404)
+                return
+            write_projects(projects)
+            self._send_json({**updated, "dashboard": inspect_project(updated)})
+        except Exception as exc:
+            self._send_json({"error": str(exc)}, 400)
 
     def do_DELETE(self) -> None:
         path = self._route_path()
