@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import math
 import os
@@ -36,8 +37,12 @@ DATA_DIR = Path(os.environ.get("DATA_DIR", ROOT / "work"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = Path(os.environ.get("DB_PATH", DATA_DIR / "ecargo.sqlite"))
 PROJECTS_FILE = Path(os.environ.get("PROJECTS_FILE", DATA_DIR / "projects.json"))
+PROJECT_UPLOADS = DATA_DIR / "project_uploads"
+PROJECT_UPLOADS.mkdir(parents=True, exist_ok=True)
 LEGACY_REPO = ROOT / "chamados222pendencias.exe-master" / "chamados222pendencias.exe-master"
 LEGACY_SOURCE = LEGACY_REPO / "Chamados222Pendencias" / "Repository" / "Impls" / "ChamadosRepository.cs"
+GRAPH_BASE_URL = "https://graph.microsoft.com/v1.0"
+GRAPH_TOKEN: dict[str, object] = {"value": "", "expires_at": 0.0}
 
 MONTH_NAMES = [
     "Janeiro",
@@ -206,28 +211,50 @@ class UploadFile:
         self.file = io.BytesIO(data)
 
 
-def _read_uploaded_file(headers, rfile) -> UploadFile | None:
+def _read_form_data(headers, rfile) -> tuple[dict[str, str], UploadFile | None]:
+    fields: dict[str, str] = {}
     content_type = headers.get("Content-Type", "")
     if cgi is not None:
         form = cgi.FieldStorage(fp=rfile, headers=headers, environ={"REQUEST_METHOD": "POST"})
-        return form["file"] if "file" in form else None
+        file_item = None
+        for key in form.keys():
+            item = form[key]
+            if isinstance(item, list):
+                item = item[0]
+            if getattr(item, "filename", ""):
+                file_item = item
+            else:
+                fields[str(key)] = str(getattr(item, "value", "") or "")
+        return fields, file_item
 
     match = re.search(r'boundary="?([^";]+)"?', content_type)
     if not match:
-        return None
+        return fields, None
     length = int(headers.get("Content-Length", "0") or "0")
     body = rfile.read(length)
     boundary = b"--" + match.group(1).encode("utf-8")
+    file_item = None
     for part in body.split(boundary):
-        if b'Content-Disposition:' not in part or b'name="file"' not in part:
+        if b"Content-Disposition:" not in part:
             continue
         header_blob, _, content = part.partition(b"\r\n\r\n")
         disposition = header_blob.decode("utf-8", errors="replace")
+        name_match = re.search(r'name="([^"]+)"', disposition)
+        if not name_match:
+            continue
+        field_name = name_match.group(1)
+        value = content.rstrip(b"\r\n-")
         filename_match = re.search(r'filename="([^"]+)"', disposition)
-        if not filename_match:
-            return None
-        return UploadFile(filename_match.group(1), content.rstrip(b"\r\n-"))
-    return None
+        if filename_match:
+            file_item = UploadFile(filename_match.group(1), value)
+        else:
+            fields[field_name] = value.decode("utf-8", errors="replace")
+    return fields, file_item
+
+
+def _read_uploaded_file(headers, rfile) -> UploadFile | None:
+    _, file_item = _read_form_data(headers, rfile)
+    return file_item
 
 
 def _db() -> sqlite3.Connection:
@@ -832,6 +859,258 @@ def _find_latest_schedule(folder_path: str) -> dict | None:
     return files[0] if files else None
 
 
+def _uploaded_schedule_info(schedule: dict) -> dict | None:
+    path = Path(str(schedule.get("path", "")))
+    if not path.exists() or not path.is_file():
+        return None
+    suffix = path.suffix.lower()
+    if suffix not in PROJECT_EXTENSIONS:
+        return None
+    stat = path.stat()
+    return {
+        "name": str(schedule.get("name") or path.name),
+        "path": str(path),
+        "extension": suffix,
+        "modifiedAt": datetime.fromtimestamp(stat.st_mtime),
+        "size": stat.st_size,
+        "sourceType": "upload",
+    }
+
+
+def _save_project_upload(file_item) -> dict:
+    original_name = Path(str(getattr(file_item, "filename", "") or "")).name
+    suffix = Path(original_name).suffix.lower()
+    if suffix not in PROJECT_EXTENSIONS:
+        raise RuntimeError("Formato inválido. Use .xml, .mpp ou .mpt.")
+
+    target = PROJECT_UPLOADS / f"{uuid.uuid4().hex}{suffix}"
+    with target.open("wb") as fh:
+        fh.write(file_item.file.read())
+    stat = target.stat()
+    return {
+        "name": original_name,
+        "path": str(target),
+        "extension": suffix,
+        "modifiedAt": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+        "size": stat.st_size,
+    }
+
+
+def _sharepoint_credentials() -> tuple[str, str, str]:
+    tenant_id = os.environ.get("MS_GRAPH_TENANT_ID", "").strip()
+    client_id = os.environ.get("MS_GRAPH_CLIENT_ID", "").strip()
+    client_secret = os.environ.get("MS_GRAPH_CLIENT_SECRET", "").strip()
+    if tenant_id and client_id and client_secret:
+        return tenant_id, client_id, client_secret
+    raise RuntimeError(
+        "Integração SharePoint não configurada. Defina MS_GRAPH_TENANT_ID, MS_GRAPH_CLIENT_ID e MS_GRAPH_CLIENT_SECRET."
+    )
+
+
+def _graph_token() -> str:
+    now = time.time()
+    cached = str(GRAPH_TOKEN.get("value") or "")
+    if cached and float(GRAPH_TOKEN.get("expires_at") or 0) > now + 60:
+        return cached
+
+    tenant_id, client_id, client_secret = _sharepoint_credentials()
+    body = urllib.parse.urlencode(
+        {
+            "client_id": client_id,
+            "scope": "https://graph.microsoft.com/.default",
+            "client_secret": client_secret,
+            "grant_type": "client_credentials",
+        }
+    ).encode("utf-8")
+    request = urllib.request.Request(
+        f"https://login.microsoftonline.com/{urllib.parse.quote(tenant_id)}/oauth2/v2.0/token",
+        data=body,
+        headers={"Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            payload = json.loads(response.read().decode("utf-8", errors="replace") or "{}")
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")[:200]
+        raise RuntimeError(f"Falha ao autenticar no Microsoft Graph: HTTP {exc.code}: {detail}") from exc
+
+    token = str(payload.get("access_token") or "")
+    if not token:
+        raise RuntimeError("Microsoft Graph não retornou access_token.")
+    GRAPH_TOKEN["value"] = token
+    GRAPH_TOKEN["expires_at"] = now + int(payload.get("expires_in") or 3600)
+    return token
+
+
+def _graph_json(path_or_url: str) -> dict:
+    url = path_or_url if path_or_url.startswith("https://") else f"{GRAPH_BASE_URL}{path_or_url}"
+    request = urllib.request.Request(url, headers={"Authorization": f"Bearer {_graph_token()}", "Accept": "application/json"})
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            return json.loads(response.read().decode("utf-8", errors="replace") or "{}")
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")[:200]
+        raise RuntimeError(f"Falha ao consultar Microsoft Graph: HTTP {exc.code}: {detail}") from exc
+
+
+def _graph_bytes(path_or_url: str) -> bytes:
+    url = path_or_url if path_or_url.startswith("https://") else f"{GRAPH_BASE_URL}{path_or_url}"
+    request = urllib.request.Request(url, headers={"Authorization": f"Bearer {_graph_token()}"})
+    try:
+        with urllib.request.urlopen(request, timeout=90) as response:
+            return response.read()
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")[:200]
+        raise RuntimeError(f"Falha ao baixar arquivo do SharePoint: HTTP {exc.code}: {detail}") from exc
+
+
+def _graph_all(path: str) -> list[dict]:
+    items: list[dict] = []
+    url: str | None = path
+    while url:
+        payload = _graph_json(url)
+        items.extend(payload.get("value") or [])
+        url = payload.get("@odata.nextLink")
+    return items
+
+
+def _sharepoint_path_from_url(sharepoint_url: str) -> tuple[str, str]:
+    parsed = urllib.parse.urlparse(sharepoint_url)
+    if not parsed.scheme.startswith("http") or not parsed.netloc:
+        raise RuntimeError("Informe uma URL completa do SharePoint.")
+
+    path = urllib.parse.unquote(parsed.path or "")
+    query = urllib.parse.parse_qs(parsed.query)
+    if query.get("id"):
+        path = urllib.parse.unquote(query["id"][0])
+
+    path = path.replace("\\", "/")
+    match = re.search(r"/(sites|teams)/[^/]+", path, flags=re.IGNORECASE)
+    if not match:
+        raise RuntimeError("A URL do SharePoint precisa conter /sites/NOME ou /teams/NOME.")
+    path = path[match.start() :]
+    return parsed.netloc, path
+
+
+def _sharepoint_site_path(path: str) -> str:
+    match = re.search(r"/(sites|teams)/[^/]+", path, flags=re.IGNORECASE)
+    if not match:
+        raise RuntimeError("Não consegui identificar o site do SharePoint na URL.")
+    return path[match.start() : match.end()]
+
+
+def _graph_quote_path(path: str) -> str:
+    return urllib.parse.quote(path.strip("/"), safe="/")
+
+
+def _graph_share_id(url: str) -> str:
+    encoded = base64.urlsafe_b64encode(url.encode("utf-8")).decode("ascii").rstrip("=")
+    return f"u!{encoded}"
+
+
+def _sharepoint_is_share_link(sharepoint_url: str) -> bool:
+    path = urllib.parse.urlparse(sharepoint_url).path
+    return path.startswith("/:") or "/_layouts/" in path
+
+
+def _sharepoint_drive_and_item_from_share(sharepoint_url: str) -> tuple[dict, dict]:
+    item = _graph_json(f"/shares/{_graph_share_id(sharepoint_url)}/driveItem")
+    parent = item.get("parentReference") or {}
+    drive_id = str(parent.get("driveId") or "")
+    if not drive_id:
+        raise RuntimeError("Não consegui identificar a biblioteca do link compartilhado do SharePoint.")
+    return {"id": drive_id}, item
+
+
+def _sharepoint_drive_and_item(sharepoint_url: str) -> tuple[dict, dict]:
+    if _sharepoint_is_share_link(sharepoint_url):
+        return _sharepoint_drive_and_item_from_share(sharepoint_url)
+
+    hostname, path = _sharepoint_path_from_url(sharepoint_url)
+    site_path = _sharepoint_site_path(path)
+    site = _graph_json(f"/sites/{hostname}:/{_graph_quote_path(site_path)}")
+    site_id = site.get("id")
+    if not site_id:
+        raise RuntimeError("Não consegui resolver o site do SharePoint.")
+
+    drives = _graph_all(f"/sites/{urllib.parse.quote(str(site_id), safe='')}/drives")
+    if not drives:
+        raise RuntimeError(
+            "Não encontrei bibliotecas no site do SharePoint. Confirme se a App Registration tem permissão Sites.Read.All ou Sites.Selected liberada para esse site."
+        )
+    candidates = []
+    normalized_path = path.rstrip("/")
+    for drive in drives:
+        drive_url = str(drive.get("webUrl") or "")
+        drive_path = urllib.parse.unquote(urllib.parse.urlparse(drive_url).path or "").rstrip("/")
+        if drive_path and (normalized_path == drive_path or normalized_path.startswith(f"{drive_path}/")):
+            candidates.append((len(drive_path), drive, drive_path))
+
+    if not candidates:
+        raise RuntimeError("Não encontrei a biblioteca do SharePoint correspondente à URL.")
+
+    _, drive, drive_path = sorted(candidates, key=lambda item: item[0], reverse=True)[0]
+    drive_id = str(drive.get("id") or "")
+    relative_path = normalized_path[len(drive_path) :].strip("/")
+    if not relative_path:
+        item = _graph_json(f"/drives/{urllib.parse.quote(drive_id, safe='')}/root")
+    else:
+        item = _graph_json(f"/drives/{urllib.parse.quote(drive_id, safe='')}/root:/{_graph_quote_path(relative_path)}:")
+    return drive, item
+
+
+def _sharepoint_item_info(item: dict, sharepoint_url: str, drive_id: str) -> dict:
+    suffix = Path(str(item.get("name") or "")).suffix.lower()
+    modified = _project_date(str(item.get("lastModifiedDateTime") or ""))
+    return {
+        "name": str(item.get("name") or ""),
+        "path": sharepoint_url,
+        "extension": suffix,
+        "modifiedAt": modified or datetime.now(),
+        "size": int(item.get("size") or 0),
+        "sourceType": "sharepoint",
+        "webUrl": str(item.get("webUrl") or sharepoint_url),
+        "driveId": drive_id,
+        "driveItemId": str(item.get("id") or ""),
+    }
+
+
+def _find_latest_sharepoint_schedule(sharepoint_url: str) -> dict | None:
+    drive, item = _sharepoint_drive_and_item(sharepoint_url)
+    drive_id = str(drive.get("id") or "")
+
+    if item.get("file"):
+        suffix = Path(str(item.get("name") or "")).suffix.lower()
+        return _sharepoint_item_info(item, sharepoint_url, drive_id) if suffix in PROJECT_EXTENSIONS else None
+
+    if not item.get("folder"):
+        return None
+
+    children = _graph_all(
+        f"/drives/{urllib.parse.quote(drive_id, safe='')}/items/{urllib.parse.quote(str(item.get('id') or ''), safe='')}/children"
+        "?$select=id,name,size,file,folder,lastModifiedDateTime,webUrl"
+    )
+    files = [
+        _sharepoint_item_info(child, sharepoint_url, drive_id)
+        for child in children
+        if child.get("file") and Path(str(child.get("name") or "")).suffix.lower() in PROJECT_EXTENSIONS
+    ]
+    files.sort(key=lambda item_info: item_info["modifiedAt"], reverse=True)
+    return files[0] if files else None
+
+
+def _read_sharepoint_file(file_info: dict) -> str:
+    drive_id = str(file_info.get("driveId") or "")
+    item_id = str(file_info.get("driveItemId") or "")
+    if not drive_id or not item_id:
+        raise RuntimeError("Arquivo do SharePoint sem driveId ou driveItemId.")
+    content = _graph_bytes(
+        f"/drives/{urllib.parse.quote(drive_id, safe='')}/items/{urllib.parse.quote(item_id, safe='')}/content"
+    )
+    return content.decode("utf-8", errors="ignore")
+
+
 def _find_custom_field_id(root: ET.Element, alias_text: str) -> str | None:
     attributes = root.find("ExtendedAttributes")
     for field in _project_children(attributes, "ExtendedAttribute"):
@@ -953,9 +1232,20 @@ def summarize_xml_project(xml_text: str, file_info: dict) -> dict:
 
 
 def inspect_project(project: dict) -> dict:
-    latest = _find_latest_schedule(str(project.get("folderPath", "")))
+    uploaded_schedule = project.get("uploadedSchedule") or {}
+    sharepoint_url = str(project.get("sharepointUrl", "")).strip()
+    if uploaded_schedule:
+        latest = _uploaded_schedule_info(uploaded_schedule)
+        missing_message = "O arquivo enviado para este projeto não está mais acessível no servidor."
+    elif sharepoint_url:
+        latest = _find_latest_sharepoint_schedule(sharepoint_url)
+        missing_message = "Nenhum arquivo .xml, .mpp ou .mpt foi encontrado na URL do SharePoint cadastrada."
+    else:
+        latest = _find_latest_schedule(str(project.get("folderPath", "")))
+        missing_message = "Nenhum arquivo .xml, .mpp ou .mpt foi encontrado na pasta cadastrada."
+
     if not latest:
-        return {"status": "missing", "message": "Nenhum arquivo .xml, .mpp ou .mpt foi encontrado na pasta cadastrada."}
+        return {"status": "missing", "message": missing_message}
 
     file_info = {
         "name": latest["name"],
@@ -963,6 +1253,10 @@ def inspect_project(project: dict) -> dict:
         "extension": latest["extension"],
         "modifiedAt": latest["modifiedAt"].isoformat(),
         "size": latest["size"],
+        "sourceType": latest.get("sourceType", "local"),
+        "webUrl": latest.get("webUrl", ""),
+        "driveId": latest.get("driveId", ""),
+        "driveItemId": latest.get("driveItemId", ""),
     }
     if latest["extension"] != ".xml":
         return {
@@ -972,7 +1266,11 @@ def inspect_project(project: dict) -> dict:
             "message": "No app unificado, exporte o cronograma para XML para leitura automática. A conversão MPP/MPT será tratada em uma etapa separada.",
         }
 
-    return summarize_xml_project(Path(latest["path"]).read_text(encoding="utf-8", errors="ignore"), file_info)
+    if latest.get("sourceType") == "sharepoint":
+        xml_text = _read_sharepoint_file(latest)
+    else:
+        xml_text = Path(latest["path"]).read_text(encoding="utf-8", errors="ignore")
+    return summarize_xml_project(xml_text, file_info)
 
 
 def projects_payload() -> list[dict]:
@@ -1065,17 +1363,52 @@ class Handler(BaseHTTPRequestHandler):
                 payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
                 name = str(payload.get("name", "")).strip()
                 folder_path = str(payload.get("folderPath", "")).strip()
-                if not name or not folder_path:
-                    self._send_json({"error": "Informe o nome do projeto e o caminho da pasta."}, 400)
+                sharepoint_url = str(payload.get("sharepointUrl", "")).strip()
+                if not name or not (folder_path or sharepoint_url):
+                    self._send_json({"error": "Informe o nome do projeto e uma pasta local ou URL do SharePoint."}, 400)
                     return
-                if not Path(folder_path).is_dir():
+                if folder_path and sharepoint_url:
+                    self._send_json({"error": "Informe apenas uma origem: pasta local ou URL do SharePoint."}, 400)
+                    return
+                if folder_path and not Path(folder_path).is_dir():
                     self._send_json({"error": "O caminho informado não é uma pasta acessível pelo servidor."}, 400)
                     return
+                if sharepoint_url:
+                    _sharepoint_credentials()
                 projects = read_projects()
                 project = {
                     "id": uuid.uuid4().hex,
                     "name": name,
-                    "folderPath": folder_path,
+                    "createdAt": datetime.now().isoformat(timespec="seconds"),
+                }
+                if sharepoint_url:
+                    project["sharepointUrl"] = sharepoint_url
+                else:
+                    project["folderPath"] = folder_path
+                projects.append(project)
+                write_projects(projects)
+                self._send_json({**project, "dashboard": inspect_project(project)}, 201)
+            except Exception as exc:
+                self._send_json({"error": str(exc)}, 400)
+            return
+
+        if path == "/api/projects/upload":
+            try:
+                fields, file_item = _read_form_data(self.headers, self.rfile)
+                name = str(fields.get("name", "")).strip()
+                if not name:
+                    self._send_json({"error": "Informe o nome do projeto."}, 400)
+                    return
+                if file_item is None or not getattr(file_item, "filename", ""):
+                    self._send_json({"error": "Envie um cronograma .xml, .mpp ou .mpt."}, 400)
+                    return
+
+                uploaded = _save_project_upload(file_item)
+                projects = read_projects()
+                project = {
+                    "id": uuid.uuid4().hex,
+                    "name": name,
+                    "uploadedSchedule": uploaded,
                     "createdAt": datetime.now().isoformat(timespec="seconds"),
                 }
                 projects.append(project)

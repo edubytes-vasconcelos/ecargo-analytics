@@ -3,18 +3,22 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>E-Cargo Analytics</title>
+    <title>Portal E-Cargo</title>
     <link rel="stylesheet" href="__BASE_PATH__/styles.css" />
   </head>
   <body>
     <main class="shell">
       <section class="topbar">
-        <div>
-          <h1>E-Cargo Analytics</h1>
-          <p>Busque os chamados direto do 222 ou use um relatório .xlsx como fallback.</p>
+        <div class="brand-block">
+          <span class="eyebrow">Portal operacional</span>
+          <h1>Projetos e Sustentação</h1>
+          <p>Gestão de chamados, SLA e indicadores executivos do E-Cargo.</p>
         </div>
+        <nav class="portal-nav" aria-label="Áreas do portal">
+          <a class="active" href="__BASE_PATH__/">Sustentação</a>
+          <a href="__BASE_PATH__/projetos">Projetos</a>
+        </nav>
         <div class="actions">
-          <a class="nav-link" href="__BASE_PATH__/projetos">Projetos</a>
           <label class="date-field">
             <span>De</span>
             <input id="startDateInput" type="date" />
@@ -23,10 +27,10 @@
             <span>Até</span>
             <input id="endDateInput" type="date" />
           </label>
-          <button id="fetch222" type="button">Buscar do 222</button>
+          <button id="fetch222" type="button">Atualizar 222</button>
           <label class="upload">
             <input id="fileInput" type="file" accept=".xlsx" />
-            <span>Selecionar Excel</span>
+            <span>Importar Excel</span>
           </label>
         </div>
       </section>
@@ -179,6 +183,6 @@
         </article>
       </section>
     </main>
-    <script src="__BASE_PATH__/app.js?v=21"></script>
+    <script src="__BASE_PATH__/app.js?v=22"></script>
   </body>
 </html>

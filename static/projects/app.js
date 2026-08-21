@@ -125,6 +125,10 @@ function getDashboardNumbers(project) {
   return { dashboard, realized, planned, variance, selectedFile };
 }
 
+function projectSource(project) {
+  return project.uploadedSchedule?.name || project.sharepointUrl || project.folderPath || "";
+}
+
 function projectRiskClass(dashboard, variance) {
   if ((dashboard.lateTasks ?? 0) > 0) return "late";
   if ((dashboard.attentionTasks ?? 0) > 0 || variance < 0) return "risk";
@@ -350,7 +354,7 @@ function renderProjectDetail(project) {
   const taskState = projectUiState.get(project.id);
 
   setText(node, "name", project.name);
-  setText(node, "folder", project.folderPath);
+  setText(node, "folder", projectSource(project));
   setText(node, "message", dashboard.message || "Aguardando leitura do cronograma.");
   setText(node, "plannedPercent", `${planned}%`);
   setText(node, "realizedPercent", `${realized}%`);
@@ -437,16 +441,36 @@ async function deleteProject(id) {
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const payload = {
-    name: document.querySelector("#projectName").value,
-    folderPath: document.querySelector("#folderPath").value,
-  };
+  const name = document.querySelector("#projectName").value.trim();
+  const source = document.querySelector("#folderPath").value.trim();
+  const file = document.querySelector("#scheduleFile").files[0];
+  let response;
 
-  const response = await fetch(`${appBasePath}/api/projects`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+  if (file) {
+    const formData = new FormData();
+    formData.append("name", name);
+    formData.append("file", file);
+    response = await fetch(`${appBasePath}/api/projects/upload`, {
+      method: "POST",
+      body: formData,
+    });
+  } else {
+    const payload = { name };
+    if (!source) {
+      alert("Informe uma pasta, URL do SharePoint ou envie um arquivo.");
+      return;
+    }
+    if (/^https?:\/\//i.test(source)) {
+      payload.sharepointUrl = source;
+    } else {
+      payload.folderPath = source;
+    }
+    response = await fetch(`${appBasePath}/api/projects`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  }
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
     alert(body.error || "Nao foi possivel cadastrar o projeto.");

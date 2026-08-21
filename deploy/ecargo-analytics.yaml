@@ -12,6 +12,9 @@ type: Opaque
 stringData:
   ECARGO_222_USER: "substituir-no-rancher"
   ECARGO_222_PASSWORD: "substituir-no-rancher"
+  MS_GRAPH_TENANT_ID: "substituir-no-rancher"
+  MS_GRAPH_CLIENT_ID: "substituir-no-rancher"
+  MS_GRAPH_CLIENT_SECRET: "substituir-no-rancher"
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -73,6 +76,21 @@ spec:
                 secretKeyRef:
                   name: ecargo-222-credentials
                   key: ECARGO_222_PASSWORD
+            - name: MS_GRAPH_TENANT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: ecargo-222-credentials
+                  key: MS_GRAPH_TENANT_ID
+            - name: MS_GRAPH_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: ecargo-222-credentials
+                  key: MS_GRAPH_CLIENT_ID
+            - name: MS_GRAPH_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ecargo-222-credentials
+                  key: MS_GRAPH_CLIENT_SECRET
           readinessProbe:
             httpGet:
               path: /ecargo-analytics
