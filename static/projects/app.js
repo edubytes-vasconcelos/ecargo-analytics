@@ -447,8 +447,8 @@ form.addEventListener("submit", async (event) => {
   let response;
 
   if (file) {
-    if (!file.name.toLowerCase().endsWith(".xml")) {
-      alert("Para upload manual, exporte o cronograma do Project como XML e envie o arquivo .xml.");
+    if (!/\.(xml|mpp|mpt)$/i.test(file.name)) {
+      alert("Envie um cronograma .xml, .mpp ou .mpt.");
       return;
     }
     const formData = new FormData();

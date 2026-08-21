@@ -43,6 +43,7 @@ LEGACY_REPO = ROOT / "chamados222pendencias.exe-master" / "chamados222pendencias
 LEGACY_SOURCE = LEGACY_REPO / "Chamados222Pendencias" / "Repository" / "Impls" / "ChamadosRepository.cs"
 GRAPH_BASE_URL = "https://graph.microsoft.com/v1.0"
 GRAPH_TOKEN: dict[str, object] = {"value": "", "expires_at": 0.0}
+PROJECT_CONVERT_LOCK = threading.Lock()
 
 MONTH_NAMES = [
     "Janeiro",
@@ -874,26 +875,99 @@ def _uploaded_schedule_info(schedule: dict) -> dict | None:
         "modifiedAt": datetime.fromtimestamp(stat.st_mtime),
         "size": stat.st_size,
         "sourceType": "upload",
+        "convertedXml": schedule.get("convertedXml") or {},
     }
 
 
 def _save_project_upload(file_item) -> dict:
     original_name = Path(str(getattr(file_item, "filename", "") or "")).name
     suffix = Path(original_name).suffix.lower()
-    if suffix != ".xml":
-        raise RuntimeError("Formato inválido para upload. Exporte o cronograma do Project como XML e envie o arquivo .xml.")
+    if suffix not in PROJECT_EXTENSIONS:
+        raise RuntimeError("Formato inválido. Envie um cronograma .xml, .mpp ou .mpt.")
 
     target = PROJECT_UPLOADS / f"{uuid.uuid4().hex}{suffix}"
     with target.open("wb") as fh:
         fh.write(file_item.file.read())
     stat = target.stat()
-    return {
+    uploaded = {
         "name": original_name,
         "path": str(target),
         "extension": suffix,
         "modifiedAt": datetime.fromtimestamp(stat.st_mtime).isoformat(),
         "size": stat.st_size,
     }
+    if suffix != ".xml":
+        converted = _convert_project_to_xml(target)
+        converted_stat = converted.stat()
+        uploaded["convertedXml"] = {
+            "name": converted.name,
+            "path": str(converted),
+            "extension": ".xml",
+            "modifiedAt": datetime.fromtimestamp(converted_stat.st_mtime).isoformat(),
+            "size": converted_stat.st_size,
+        }
+    return uploaded
+
+
+def _converted_xml_info(file_info: dict) -> dict:
+    converted = file_info.get("convertedXml") or {}
+    converted_path = Path(str(converted.get("path", "")))
+    if not converted_path.exists() or not converted_path.is_file():
+        source_path = Path(str(file_info.get("path", "")))
+        converted_path = _convert_project_to_xml(source_path)
+
+    stat = converted_path.stat()
+    return {
+        "name": converted_path.name,
+        "path": str(converted_path),
+        "extension": ".xml",
+        "modifiedAt": datetime.fromtimestamp(stat.st_mtime),
+        "size": stat.st_size,
+        "sourceType": "converted",
+        "convertedFrom": {
+            "name": file_info.get("name", source_path.name if "source_path" in locals() else converted_path.name),
+            "path": file_info.get("path", ""),
+            "extension": file_info.get("extension", ""),
+            "modifiedAt": _json_datetime(file_info.get("modifiedAt")),
+            "size": file_info.get("size", 0),
+            "sourceType": file_info.get("sourceType", "local"),
+            "webUrl": file_info.get("webUrl", ""),
+        },
+    }
+
+
+def _json_datetime(value) -> str:
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return str(value or "")
+
+
+def _convert_project_to_xml(source_path: Path) -> Path:
+    if source_path.suffix.lower() == ".xml":
+        return source_path
+    if source_path.suffix.lower() not in {".mpp", ".mpt"}:
+        raise RuntimeError("Formato inválido. Use .xml, .mpp ou .mpt.")
+    if not source_path.exists():
+        raise RuntimeError("Arquivo de cronograma não encontrado para conversão.")
+
+    output_path = PROJECT_UPLOADS / f"{source_path.stem}-{uuid.uuid4().hex}.xml"
+    try:
+        import jpype
+        import mpxj  # noqa: F401
+    except Exception as exc:
+        raise RuntimeError("Conversão MPP/MPT indisponível. Instale Java e o pacote mpxj no container.") from exc
+
+    with PROJECT_CONVERT_LOCK:
+        if not jpype.isJVMStarted():
+            jpype.startJVM()
+        from org.mpxj.reader import UniversalProjectReader
+        from org.mpxj.writer import FileFormat, UniversalProjectWriter
+
+        project_file = UniversalProjectReader().read(str(source_path))
+        if project_file is None:
+            raise RuntimeError("Não consegui ler o arquivo MPP/MPT enviado.")
+        UniversalProjectWriter(FileFormat.MSPDI).write(project_file, str(output_path))
+    return output_path
 
 
 def _sharepoint_credentials() -> tuple[str, str, str]:
@@ -1101,14 +1175,30 @@ def _find_latest_sharepoint_schedule(sharepoint_url: str) -> dict | None:
 
 
 def _read_sharepoint_file(file_info: dict) -> str:
+    return _read_sharepoint_file_bytes(file_info).decode("utf-8", errors="ignore")
+
+
+def _read_sharepoint_file_bytes(file_info: dict) -> bytes:
     drive_id = str(file_info.get("driveId") or "")
     item_id = str(file_info.get("driveItemId") or "")
     if not drive_id or not item_id:
         raise RuntimeError("Arquivo do SharePoint sem driveId ou driveItemId.")
-    content = _graph_bytes(
+    return _graph_bytes(
         f"/drives/{urllib.parse.quote(drive_id, safe='')}/items/{urllib.parse.quote(item_id, safe='')}/content"
     )
-    return content.decode("utf-8", errors="ignore")
+
+
+def _sharepoint_file_to_local(file_info: dict) -> dict:
+    suffix = str(file_info.get("extension") or "").lower()
+    target = PROJECT_UPLOADS / f"{uuid.uuid4().hex}{suffix}"
+    target.write_bytes(_read_sharepoint_file_bytes(file_info))
+    stat = target.stat()
+    return {
+        **file_info,
+        "path": str(target),
+        "modifiedAt": datetime.fromtimestamp(stat.st_mtime),
+        "size": stat.st_size,
+    }
 
 
 def _find_custom_field_id(root: ET.Element, alias_text: str) -> str | None:
@@ -1258,19 +1348,29 @@ def inspect_project(project: dict) -> dict:
         "driveId": latest.get("driveId", ""),
         "driveItemId": latest.get("driveItemId", ""),
     }
-    if latest["extension"] != ".xml":
-        return {
-            "status": "unsupported",
-            "sourceType": latest["extension"].replace(".", ""),
-            "file": file_info,
-            "message": "No app unificado, exporte o cronograma para XML para leitura automática. A conversão MPP/MPT será tratada em uma etapa separada.",
-        }
-
-    if latest.get("sourceType") == "sharepoint":
+    if latest["extension"] == ".xml" and latest.get("sourceType") == "sharepoint":
         xml_text = _read_sharepoint_file(latest)
-    else:
+    elif latest["extension"] == ".xml":
         xml_text = Path(latest["path"]).read_text(encoding="utf-8", errors="ignore")
-    return summarize_xml_project(xml_text, file_info)
+    else:
+        source_info = _sharepoint_file_to_local(latest) if latest.get("sourceType") == "sharepoint" else latest
+        converted = _converted_xml_info(source_info)
+        file_info = {
+            "name": converted["name"],
+            "path": converted["path"],
+            "extension": converted["extension"],
+            "modifiedAt": converted["modifiedAt"].isoformat(),
+            "size": converted["size"],
+            "sourceType": converted["sourceType"],
+            "webUrl": "",
+            "convertedFrom": converted["convertedFrom"],
+        }
+        xml_text = Path(converted["path"]).read_text(encoding="utf-8", errors="ignore")
+
+    result = summarize_xml_project(xml_text, file_info)
+    if result["file"].get("convertedFrom"):
+        result["message"] = "Cronograma convertido para XML e lido com sucesso."
+    return result
 
 
 def projects_payload() -> list[dict]:
