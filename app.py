@@ -955,7 +955,7 @@ def _convert_project_to_xml(source_path: Path) -> Path:
         import jpype
         import mpxj  # noqa: F401
     except Exception as exc:
-        raise RuntimeError("Conversão MPP/MPT indisponível. Instale Java e o pacote mpxj no container.") from exc
+        raise RuntimeError(f"Conversão MPP/MPT indisponível no container: {type(exc).__name__}: {str(exc)[:160]}") from exc
 
     with PROJECT_CONVERT_LOCK:
         if not jpype.isJVMStarted():
