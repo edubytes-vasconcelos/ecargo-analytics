@@ -67,6 +67,18 @@ button:hover,
   border-color: var(--brand-dark);
 }
 
+.icon-button {
+  width: 40px;
+  min-width: 40px;
+  padding: 0;
+}
+
+.icon-button svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
 button:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
@@ -154,19 +166,6 @@ h1 {
   gap: 10px;
 }
 
-.dashboard-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 12px;
-}
-
-.dashboard-actions button:last-child {
-  border-color: var(--line);
-  background: var(--panel);
-  color: var(--brand-dark);
-}
-
 .nav-link {
   display: none;
 }
@@ -218,7 +217,7 @@ main {
   grid-template-columns: minmax(260px, 1fr) auto;
   align-items: center;
   gap: 14px;
-  margin-bottom: 18px;
+  margin: 0;
   padding: 14px 16px;
   border: 1px solid var(--line);
   border-left: 6px solid var(--amber);
@@ -865,6 +864,41 @@ dd {
   align-items: center;
 }
 
+.modal-actions {
+  justify-content: flex-end;
+}
+
+.settings-modal {
+  width: min(760px, 100%);
+}
+
+.settings-block {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-soft);
+}
+
+.settings-block h3,
+.criteria-panel h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.settings-actions button:last-child {
+  border-color: var(--line);
+  background: var(--panel);
+  color: var(--brand-dark);
+}
+
 @media (max-width: 1180px) {
   .topbar,
   form,
@@ -909,12 +943,11 @@ dd {
     width: 100%;
   }
 
-  .dashboard-actions,
   .summary-actions {
     grid-template-columns: 1fr;
   }
 
-  .dashboard-actions,
+  .settings-actions,
   .settings-form {
     display: grid;
   }

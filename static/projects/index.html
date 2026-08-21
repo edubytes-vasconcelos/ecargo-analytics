@@ -19,15 +19,15 @@
       </nav>
       <div class="top-actions">
         <button id="refreshButton" type="button" title="Atualizar cronogramas">Atualizar cronogramas</button>
+        <button id="openSettingsButton" class="icon-button" type="button" title="Configurações" aria-label="Configurações">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 8.4a3.6 3.6 0 1 1 0 7.2 3.6 3.6 0 0 1 0-7.2Zm0-5.4 1.4 2.2 2.6.5.4 2.6 2.1 1.5-1 2.5 1 2.5-2.1 1.5-.4 2.6-2.6.5L12 22l-1.4-2.2-2.6-.5-.4-2.6-2.1-1.5 1-2.5-1-2.5 2.1-1.5.4-2.6 2.6-.5L12 3Z" />
+          </svg>
+        </button>
       </div>
     </header>
 
     <main>
-      <section class="dashboard-actions" aria-label="Ações de projetos">
-        <button id="showProjectFormButton" type="button">Cadastrar projeto</button>
-        <button id="showStudyFormButton" type="button">Cadastrar projeto em estudo</button>
-      </section>
-
       <section id="projectFormPanel" class="register-panel" aria-labelledby="register-title" hidden>
         <div class="panel-heading">
           <h2 id="register-title">Cadastrar projeto</h2>
@@ -66,24 +66,6 @@
             <textarea id="studyDescription" name="description" rows="3"></textarea>
           </label>
           <button type="submit">Adicionar estudo</button>
-        </form>
-      </section>
-
-      <section class="criteria-panel" aria-labelledby="criteria-title">
-        <div>
-          <h2 id="criteria-title">Critério de atenção</h2>
-          <p id="criteriaDescription">Tarefas abaixo do planejado entram em atenção conforme o limite configurado. Atrasos por data têm prioridade.</p>
-        </div>
-        <form id="settingsForm" class="settings-form">
-          <label>
-            Atraso mínimo
-            <input id="attentionDelayInput" type="number" min="0" max="100" step="1" />
-          </label>
-          <label class="check-field">
-            <input id="negativeVarianceInput" type="checkbox" />
-            <span>Desvio geral negativo também gera atenção</span>
-          </label>
-          <button type="submit">Salvar critério</button>
         </form>
       </section>
 
@@ -178,9 +160,45 @@
           <textarea id="reportBody" readonly rows="18"></textarea>
         </label>
         <div class="modal-actions">
-          <button id="copyReportButton" type="button">Copiar e-mail</button>
-          <a id="mailtoReportLink" class="button-link" href="#">Abrir no e-mail</a>
+          <button id="copyReportButton" class="icon-button" type="button" title="Copiar status report" aria-label="Copiar status report">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M8 8h10v12H8V8Zm-3-4h10v2H7a1 1 0 0 0-1 1v9H4V5a1 1 0 0 1 1-1Z" />
+            </svg>
+          </button>
         </div>
+      </div>
+    </div>
+
+    <div id="settingsModal" class="modal" hidden>
+      <div class="modal-panel settings-modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+        <div class="modal-header">
+          <h2 id="settingsTitle">Configurações de projetos</h2>
+          <button id="closeSettingsButton" type="button" title="Fechar">Fechar</button>
+        </div>
+        <section class="settings-block">
+          <h3>Ações</h3>
+          <div class="settings-actions">
+            <button id="showProjectFormButton" type="button">Cadastrar projeto</button>
+            <button id="showStudyFormButton" type="button">Cadastrar projeto em estudo</button>
+          </div>
+        </section>
+        <section class="criteria-panel" aria-labelledby="criteria-title">
+          <div>
+            <h3 id="criteria-title">Critério de atenção</h3>
+            <p id="criteriaDescription">Tarefas abaixo do planejado entram em atenção conforme o limite configurado. Atrasos por data têm prioridade.</p>
+          </div>
+          <form id="settingsForm" class="settings-form">
+            <label>
+              Atraso mínimo
+              <input id="attentionDelayInput" type="number" min="0" max="100" step="1" />
+            </label>
+            <label class="check-field">
+              <input id="negativeVarianceInput" type="checkbox" />
+              <span>Desvio geral negativo também gera atenção</span>
+            </label>
+            <button type="submit">Salvar critério</button>
+          </form>
+        </section>
       </div>
     </div>
 
@@ -200,6 +218,6 @@
       </div>
     </div>
 
-    <script src="__BASE_PATH__/projects/app.js?v=8"></script>
+    <script src="__BASE_PATH__/projects/app.js?v=9"></script>
   </body>
 </html>

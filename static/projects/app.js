@@ -5,6 +5,9 @@ const projectFormPanel = document.querySelector("#projectFormPanel");
 const studyFormPanel = document.querySelector("#studyFormPanel");
 const studyForm = document.querySelector("#studyForm");
 const settingsForm = document.querySelector("#settingsForm");
+const settingsModal = document.querySelector("#settingsModal");
+const openSettingsButton = document.querySelector("#openSettingsButton");
+const closeSettingsButton = document.querySelector("#closeSettingsButton");
 const showProjectFormButton = document.querySelector("#showProjectFormButton");
 const hideProjectFormButton = document.querySelector("#hideProjectFormButton");
 const showStudyFormButton = document.querySelector("#showStudyFormButton");
@@ -17,7 +20,6 @@ const reportSubject = document.querySelector("#reportSubject");
 const reportBody = document.querySelector("#reportBody");
 const copyReportButton = document.querySelector("#copyReportButton");
 const closeReportButton = document.querySelector("#closeReportButton");
-const mailtoReportLink = document.querySelector("#mailtoReportLink");
 const notesModal = document.querySelector("#notesModal");
 const projectNotes = document.querySelector("#projectNotes");
 const closeNotesButton = document.querySelector("#closeNotesButton");
@@ -234,7 +236,6 @@ function openStatusReport(project) {
   const report = generateStatusReport(project);
   reportSubject.value = report.subject;
   reportBody.value = report.body;
-  mailtoReportLink.href = `mailto:?subject=${encodeURIComponent(report.subject)}&body=${encodeURIComponent(report.body)}`;
   reportModal.hidden = false;
 }
 
@@ -603,6 +604,7 @@ settingsForm.addEventListener("submit", async (event) => {
 });
 
 showProjectFormButton.addEventListener("click", () => {
+  settingsModal.hidden = true;
   projectFormPanel.hidden = false;
   studyFormPanel.hidden = true;
 });
@@ -610,11 +612,18 @@ hideProjectFormButton.addEventListener("click", () => {
   projectFormPanel.hidden = true;
 });
 showStudyFormButton.addEventListener("click", () => {
+  settingsModal.hidden = true;
   studyFormPanel.hidden = false;
   projectFormPanel.hidden = true;
 });
 hideStudyFormButton.addEventListener("click", () => {
   studyFormPanel.hidden = true;
+});
+openSettingsButton.addEventListener("click", () => {
+  settingsModal.hidden = false;
+});
+closeSettingsButton.addEventListener("click", () => {
+  settingsModal.hidden = true;
 });
 
 refreshButton.addEventListener("click", loadProjects);
@@ -643,9 +652,11 @@ saveNotesButton.addEventListener("click", async () => {
 });
 copyReportButton.addEventListener("click", async () => {
   await navigator.clipboard.writeText(`${reportSubject.value}\n\n${reportBody.value}`);
-  copyReportButton.textContent = "Copiado";
+  copyReportButton.title = "Copiado";
+  copyReportButton.setAttribute("aria-label", "Copiado");
   setTimeout(() => {
-    copyReportButton.textContent = "Copiar e-mail";
+    copyReportButton.title = "Copiar status report";
+    copyReportButton.setAttribute("aria-label", "Copiar status report");
   }, 1600);
 });
 loadSettings()
