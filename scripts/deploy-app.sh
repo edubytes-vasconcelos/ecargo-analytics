@@ -32,5 +32,4 @@ set -a
 . "$VARS_FILE"
 set +a
 
-kubectl get namespace "$NAMESPACE" >/dev/null 2>&1 || kubectl create namespace "$NAMESPACE"
 envsubst < "$MANIFEST_FILE" | kubectl apply -f -

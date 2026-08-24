@@ -31,7 +31,7 @@ Campos principais:
 
 ## Secrets
 
-Os secrets nao ficam versionados. Crie manualmente no namespace alvo:
+O namespace alvo precisa existir antes do deploy. Os secrets nao ficam versionados. Crie manualmente no namespace alvo:
 
 ```bash
 kubectl -n hml-signa-ecargo create secret generic ecargo-analytics-secrets \
