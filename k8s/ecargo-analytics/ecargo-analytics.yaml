@@ -119,25 +119,29 @@ spec:
       port: 80
       targetPort: 8765
 ---
-apiVersion: networking.k8s.io/v1
-kind: Ingress
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
 metadata:
   name: ${APP_NAME}
   namespace: ${NAMESPACE}
+  annotations:
+    konghq.com/client-body-buffer-size: 30m
+    konghq.com/connect-timeout: "1200000"
+    konghq.com/read-timeout: "1200000"
+    konghq.com/write-timeout: "1200000"
 spec:
-  ingressClassName: ${INGRESS_CLASS}
+  hostnames:
+    - ${INGRESS_HOST}
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: ${GATEWAY_NAME}
+      namespace: ${GATEWAY_NAMESPACE}
   rules:
-    - host: ${INGRESS_HOST}
-      http:
-        paths:
-          - path: ${BASE_PATH}
-            pathType: Prefix
-            backend:
-              service:
-                name: ${APP_NAME}
-                port:
-                  number: 80
-  tls:
-    - hosts:
-        - ${INGRESS_HOST}
-      secretName: ${TLS_SECRET}
+    - matches:
+        - path:
+            type: PathPrefix
+            value: ${BASE_PATH}
+      backendRefs:
+        - name: ${APP_NAME}
+          port: 80

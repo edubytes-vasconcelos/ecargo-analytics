@@ -27,7 +27,7 @@ Campos principais:
 - `IMAGE`: imagem imutavel publicada no registry.
 - `BASE_PATH`: caminho publico da aplicacao, hoje `/ecargo-analytics`.
 - `INGRESS_HOST`: DNS publico do ambiente.
-- `TLS_SECRET`: secret TLS disponivel no namespace.
+- `GATEWAY_NAME` e `GATEWAY_NAMESPACE`: Gateway Kong usado pelo cluster.
 
 ## Secrets
 

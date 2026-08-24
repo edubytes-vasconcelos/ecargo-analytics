@@ -29,10 +29,16 @@ const negativeVarianceInput = document.querySelector("#negativeVarianceInput");
 const criteriaDescription = document.querySelector("#criteriaDescription");
 const projectUiState = new Map();
 const appBasePath = document.documentElement.dataset.basePath || "";
+const scheduleUpdateInput = document.createElement("input");
+scheduleUpdateInput.type = "file";
+scheduleUpdateInput.accept = ".xml,.mpp,.mpt";
+scheduleUpdateInput.hidden = true;
+document.body.appendChild(scheduleUpdateInput);
 
 let projectsCache = [];
 let projectSettings = { attentionDelayPercent: 10, negativeVarianceAttention: false };
 let notesProjectId = null;
+let scheduleUpdateProjectId = null;
 let selectedProjectId = localStorage.getItem("selectedProjectId") || null;
 
 function formatDate(value, withTime = false) {
@@ -390,10 +396,12 @@ function renderDashboard(projects) {
       </div>
       <div class="summary-actions">
         <button type="button" data-action="open">Abrir projeto</button>
+        <button type="button" data-action="update">Atualizar cronograma</button>
         <button type="button" data-action="notes">Informações</button>
       </div>
     `;
     card.querySelector("[data-action='open']").addEventListener("click", () => openProject(project.id));
+    card.querySelector("[data-action='update']").addEventListener("click", () => chooseScheduleUpdate(project.id));
     card.querySelector("[data-action='notes']").addEventListener("click", () => openNotes(project));
     projectsEl.appendChild(card);
   }
@@ -437,6 +445,7 @@ function renderProjectDetail(project) {
   node.querySelector("[data-action='back']").addEventListener("click", showDashboard);
   node.querySelector("[data-action='delete']").addEventListener("click", () => deleteProject(project.id));
   node.querySelector("[data-action='report']").addEventListener("click", () => openStatusReport(project));
+  node.querySelector("[data-action='update']").addEventListener("click", () => chooseScheduleUpdate(project.id));
   node.querySelector("[data-action='notes']").addEventListener("click", () => openNotes(project));
 
   const taskContainer = node.querySelector("[data-field='tasks']");
@@ -499,6 +508,38 @@ async function deleteProject(id) {
   }
   projectUiState.delete(id);
   await loadProjects();
+}
+
+function chooseScheduleUpdate(projectId) {
+  scheduleUpdateProjectId = projectId;
+  scheduleUpdateInput.value = "";
+  scheduleUpdateInput.click();
+}
+
+async function updateProjectSchedule(file) {
+  if (!scheduleUpdateProjectId || !file) return;
+  if (!/\.(xml|mpp|mpt)$/i.test(file.name)) {
+    alert("Envie um cronograma .xml, .mpp ou .mpt.");
+    return;
+  }
+
+  refreshButton.disabled = true;
+  try {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await fetch(`${appBasePath}/api/projects/${scheduleUpdateProjectId}/upload`, {
+      method: "POST",
+      body: formData,
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      alert(body.error || "Nao foi possivel atualizar o cronograma.");
+      return;
+    }
+    await loadProjects();
+  } finally {
+    refreshButton.disabled = false;
+  }
 }
 
 async function loadSettings() {
@@ -649,6 +690,11 @@ saveNotesButton.addEventListener("click", async () => {
   notesModal.hidden = true;
   notesProjectId = null;
   await loadProjects();
+});
+scheduleUpdateInput.addEventListener("change", async () => {
+  const file = scheduleUpdateInput.files[0];
+  await updateProjectSchedule(file);
+  scheduleUpdateProjectId = null;
 });
 copyReportButton.addEventListener("click", async () => {
   await navigator.clipboard.writeText(`${reportSubject.value}\n\n${reportBody.value}`);

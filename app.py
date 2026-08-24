@@ -1517,6 +1517,38 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = self._route_path()
+        if path.startswith("/api/projects/") and path.endswith("/upload"):
+            project_id = path.split("/")[-2]
+            try:
+                _fields, file_item = _read_form_data(self.headers, self.rfile)
+                if file_item is None or not getattr(file_item, "filename", ""):
+                    self._send_json({"error": "Envie um cronograma .xml, .mpp ou .mpt."}, 400)
+                    return
+
+                projects = read_projects()
+                updated = None
+                for project in projects:
+                    if str(project.get("id")) != project_id:
+                        continue
+                    if project.get("type") == "study":
+                        self._send_json({"error": "Projetos em estudo não possuem cronograma para atualizar."}, 400)
+                        return
+                    project["uploadedSchedule"] = _save_project_upload(file_item)
+                    project.pop("folderPath", None)
+                    project.pop("sharepointUrl", None)
+                    project["updatedAt"] = datetime.now().isoformat(timespec="seconds")
+                    updated = project
+                    break
+
+                if updated is None:
+                    self._send_json({"error": "Projeto não encontrado."}, 404)
+                    return
+                write_projects(projects)
+                self._send_json({**updated, "dashboard": inspect_project(updated)})
+            except Exception as exc:
+                self._send_json({"error": str(exc)}, 400)
+            return
+
         if path == "/api/projects":
             try:
                 length = int(self.headers.get("Content-Length", "0") or "0")
@@ -1560,7 +1592,7 @@ class Handler(BaseHTTPRequestHandler):
                     self._send_json({"error": "Informe o nome do projeto."}, 400)
                     return
                 if file_item is None or not getattr(file_item, "filename", ""):
-                    self._send_json({"error": "Envie um cronograma .xml exportado do Project."}, 400)
+                    self._send_json({"error": "Envie um cronograma .xml, .mpp ou .mpt."}, 400)
                     return
 
                 uploaded = _save_project_upload(file_item)
