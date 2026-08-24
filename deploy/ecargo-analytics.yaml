@@ -45,6 +45,9 @@ spec:
       labels:
         app: ecargo-analytics
     spec:
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
       containers:
         - name: ecargo-analytics
           image: ghcr.io/edubytes-vasconcelos/ecargo-analytics:14c3842e06be433816e31f6d7d0a113fbea1aa55

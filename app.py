@@ -259,13 +259,29 @@ def _read_uploaded_file(headers, rfile) -> UploadFile | None:
     return file_item
 
 
+def _prepare_storage() -> None:
+    paths = {DATA_DIR, UPLOADS, DB_PATH.parent, PROJECTS_FILE.parent, PROJECT_SETTINGS_FILE.parent, PROJECT_UPLOADS}
+    for path in paths:
+        try:
+            path.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            raise RuntimeError(f"Não consegui preparar o diretório de dados {path}: {exc}") from exc
+
+
 def _db() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH)
+    try:
+        DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(DB_PATH)
+    except sqlite3.OperationalError as exc:
+        raise RuntimeError(f"Não consegui abrir o banco SQLite em {DB_PATH}: {exc}") from exc
     conn.row_factory = sqlite3.Row
+    conn.execute("pragma journal_mode=wal")
+    conn.execute("pragma foreign_keys=on")
     return conn
 
 
 def init_db() -> None:
+    _prepare_storage()
     with _db() as conn:
         conn.execute(
             """

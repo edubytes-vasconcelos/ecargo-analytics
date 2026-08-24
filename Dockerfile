@@ -17,7 +17,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app.py .
 COPY static ./static
 
-RUN mkdir -p /app/work/uploads
+RUN mkdir -p /app/data /app/work/uploads
 
 EXPOSE 8765
 
