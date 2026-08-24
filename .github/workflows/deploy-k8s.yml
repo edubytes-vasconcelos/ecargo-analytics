@@ -1,0 +1,93 @@
+name: Deploy Kubernetes
+
+on:
+  push:
+    branches:
+      - ecargo-analytics-hml
+      - ecargo-analytics-prd
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Ambiente de deploy
+        required: true
+        default: hml
+        type: choice
+        options:
+          - hml
+          - prd
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      HML_K8S_URL: https://rks.loginlogistica.com.br/k8s/clusters/c-6htg4
+      HML_KUBE_CONTEXT: cluster-tvv-stg-rke2
+      PRD_K8S_URL: https://rks.loginlogistica.com.br/k8s/clusters/c-lsb4h
+      PRD_KUBE_CONTEXT: cluster-tvv-prd
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve environment
+        id: deploy_env
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ENVIRONMENT="${{ inputs.environment }}"
+          elif [ "${{ github.ref_name }}" = "ecargo-analytics-prd" ]; then
+            ENVIRONMENT="prd"
+          else
+            ENVIRONMENT="hml"
+          fi
+
+          if [ "$ENVIRONMENT" = "prd" ]; then
+            echo "environment=prd" >> "$GITHUB_OUTPUT"
+            echo "k8s_url=$PRD_K8S_URL" >> "$GITHUB_OUTPUT"
+            echo "kube_context=$PRD_KUBE_CONTEXT" >> "$GITHUB_OUTPUT"
+            echo "deploy_token_secret=RANCHER_PRD_TOKEN" >> "$GITHUB_OUTPUT"
+          else
+            echo "environment=hml" >> "$GITHUB_OUTPUT"
+            echo "k8s_url=$HML_K8S_URL" >> "$GITHUB_OUTPUT"
+            echo "kube_context=$HML_KUBE_CONTEXT" >> "$GITHUB_OUTPUT"
+            echo "deploy_token_secret=RANCHER_HML_TOKEN" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gettext-base
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Configure kubectl
+        shell: bash
+        env:
+          HML_TOKEN: ${{ secrets.RANCHER_HML_TOKEN }}
+          PRD_TOKEN: ${{ secrets.RANCHER_PRD_TOKEN }}
+        run: |
+          if [ "${{ steps.deploy_env.outputs.environment }}" = "prd" ]; then
+            DEPLOY_TOKEN="$PRD_TOKEN"
+          else
+            DEPLOY_TOKEN="$HML_TOKEN"
+          fi
+
+          if [ -z "$DEPLOY_TOKEN" ]; then
+            echo "Secret Rancher nao configurado para o ambiente ${{ steps.deploy_env.outputs.environment }}." >&2
+            exit 1
+          fi
+
+          kubectl config set-cluster rancher \
+            --server="${{ steps.deploy_env.outputs.k8s_url }}" \
+            --insecure-skip-tls-verify=true
+          kubectl config set-credentials deploy --token="$DEPLOY_TOKEN"
+          kubectl config set-context "${{ steps.deploy_env.outputs.kube_context }}" \
+            --cluster=rancher \
+            --user=deploy
+          kubectl config use-context "${{ steps.deploy_env.outputs.kube_context }}"
+
+      - name: Deploy
+        run: sh scripts/deploy-app.sh "${{ steps.deploy_env.outputs.environment }}" ecargo-analytics

@@ -44,6 +44,20 @@ kubectl -n hml-signa-ecargo create secret generic ecargo-analytics-secrets \
 
 As keys `MS_GRAPH_*` sao opcionais no manifesto. Sem elas, o upload manual continua funcionando, mas a leitura automatica de arquivos do SharePoint fica indisponivel.
 
+## Deploy pelo GitHub Actions
+
+O deploy automatico roda pelo GitHub Actions:
+
+- push na branch `ecargo-analytics-hml`: publica em homologacao.
+- push na branch `ecargo-analytics-prd`: publica em producao.
+
+Antes do primeiro deploy, cadastre os tokens do Rancher em `Settings > Secrets and variables > Actions`:
+
+- `RANCHER_HML_TOKEN`: token do cluster de homologacao.
+- `RANCHER_PRD_TOKEN`: token do cluster de producao.
+
+O workflow usado e `.github/workflows/deploy-k8s.yml`.
+
 ## Deploy manual
 
 ```bash
