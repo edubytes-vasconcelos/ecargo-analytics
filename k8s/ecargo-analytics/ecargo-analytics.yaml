@@ -33,7 +33,7 @@ spec:
       containers:
         - name: ${APP_NAME}
           image: ${IMAGE}
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - containerPort: 8765
           env:
