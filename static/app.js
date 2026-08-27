@@ -37,6 +37,8 @@ const supportExcludedCategories = [
 ];
 const supportViewExcludedCategories = [...supportExcludedCategories];
 const supportViewExcludedStatuses = ["01 - NOVO PROBLEMA", "01-NOVO PROBLEMA"];
+const businessStartHour = 8;
+const businessEndHour = 18;
 
 document.getElementById("fileInput").addEventListener("change", uploadFile);
 document.getElementById("fetch222").addEventListener("click", fetch222);
@@ -349,7 +351,7 @@ function renderSupportView() {
   renderTable(
     "supportOpenTable",
     rows,
-    ["#", "SLA", "Horas aberto", "Horas para SLA", "Início SLA", "Categoria", "Subcategoria", "Grupo", "Status", "Data de solicitação", "Título"],
+    ["#", "SLA", "Horas úteis aberto", "Horas úteis para SLA", "Início SLA", "Categoria", "Subcategoria", "Grupo", "Status", "Data de solicitação", "Título"],
     supportSlaRowClass,
     (row) => showDetails(`Chamado ${row["#"]}`, [row._source])
   );
@@ -365,8 +367,8 @@ function supportOpenRows(sourceRows) {
       return {
         "#": row["#"],
         SLA: sla.label,
-        "Horas aberto": hours === null ? "" : fmt1.format(hours),
-        "Horas para SLA": hours === null ? "" : fmt1.format(48 - hours),
+        "Horas úteis aberto": hours === null ? "" : fmt1.format(hours),
+        "Horas úteis para SLA": hours === null ? "" : fmt1.format(48 - hours),
         "Início SLA": start.label,
         Categoria: row["Categoria de terceiro nível"] || "Não informado",
         Subcategoria: row.Subcategoria || "Não informado",
@@ -404,7 +406,37 @@ function openHours(row) {
 function openHoursFrom(value) {
   const opened = new Date(String(value || "").replace(" ", "T"));
   if (Number.isNaN(opened.getTime())) return null;
-  return Math.max(0, (new Date() - opened) / 3600000);
+  return businessHoursBetween(opened, new Date());
+}
+
+function businessHoursBetween(start, end) {
+  if (end <= start) return 0;
+  let totalMs = 0;
+  const cursor = new Date(start);
+  cursor.setSeconds(0, 0);
+
+  while (cursor < end) {
+    if (isBusinessDay(cursor)) {
+      const windowStart = new Date(cursor);
+      windowStart.setHours(businessStartHour, 0, 0, 0);
+      const windowEnd = new Date(cursor);
+      windowEnd.setHours(businessEndHour, 0, 0, 0);
+      const segmentStart = new Date(Math.max(cursor.getTime(), windowStart.getTime()));
+      const segmentEnd = new Date(Math.min(end.getTime(), windowEnd.getTime()));
+      if (segmentEnd > segmentStart) {
+        totalMs += segmentEnd - segmentStart;
+      }
+    }
+    cursor.setDate(cursor.getDate() + 1);
+    cursor.setHours(0, 0, 0, 0);
+  }
+
+  return Math.max(0, totalMs / 3600000);
+}
+
+function isBusinessDay(date) {
+  const day = date.getDay();
+  return day >= 1 && day <= 5;
 }
 
 function supportSlaStart(row) {
