@@ -18,6 +18,7 @@
         <a class="active" href="__BASE_PATH__/projetos">Projetos</a>
       </nav>
       <div class="top-actions">
+        <button id="openHelpButton" type="button" title="Abrir manual de uso">Manual</button>
         <button id="refreshButton" type="button" title="Atualizar cronogramas">Atualizar cronogramas</button>
         <button id="openSettingsButton" class="icon-button" type="button" title="Configurações" aria-label="Configurações">
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -171,6 +172,48 @@
       </div>
     </div>
 
+    <div id="helpModal" class="modal" hidden>
+      <div class="modal-panel manual-modal" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+        <div class="modal-header">
+          <h2 id="helpTitle">Manual de uso</h2>
+          <button id="closeHelpButton" type="button" title="Fechar">Fechar</button>
+        </div>
+        <div class="manual-content">
+          <section>
+            <h3>Cadastro</h3>
+            <ol>
+              <li>Abra Configurações e escolha Cadastrar projeto para acompanhar um cronograma.</li>
+              <li>Informe o nome e envie um arquivo .xml, .mpp ou .mpt, ou indique uma pasta local ou URL do SharePoint.</li>
+              <li>Use Cadastrar projeto em estudo quando ainda não houver cronograma definido.</li>
+            </ol>
+          </section>
+          <section>
+            <h3>Estudos</h3>
+            <ol>
+              <li>Use Editar estudo para alterar título e descrição.</li>
+              <li>Quando o projeto sair da fase de estudo, cadastre-o como projeto com cronograma.</li>
+              <li>Use Excluir apenas quando o estudo não precisar mais aparecer no painel.</li>
+            </ol>
+          </section>
+          <section>
+            <h3>Acompanhamento</h3>
+            <ol>
+              <li>Abra um projeto para ver tarefas, planejado, realizado, desvio, atrasos e pontos de atenção.</li>
+              <li>Use os filtros de tarefas para focar em Atenção, Atrasadas ou Em andamento.</li>
+              <li>Atualizar cronograma substitui o arquivo usado nas métricas do projeto.</li>
+            </ol>
+          </section>
+          <section>
+            <h3>Status report</h3>
+            <ol>
+              <li>Abra o projeto e clique em Gerar status report.</li>
+              <li>Revise o texto gerado e copie para enviar por e-mail.</li>
+              <li>Use Informações para registrar observações internas do projeto.</li>
+            </ol>
+          </section>
+        </div>
+      </div>
+    </div>
     <div id="settingsModal" class="modal" hidden>
       <div class="modal-panel settings-modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
         <div class="modal-header">
@@ -242,6 +285,6 @@
       </div>
     </div>
 
-    <script src="__BASE_PATH__/projects/app.js?v=12"></script>
+    <script src="__BASE_PATH__/projects/app.js?v=13"></script>
   </body>
 </html>

@@ -888,6 +888,38 @@ dd {
   width: min(760px, 100%);
 }
 
+.manual-modal {
+  width: min(980px, 100%);
+}
+
+.manual-content {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.manual-content section {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-soft);
+  padding: 14px;
+}
+
+.manual-content h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+.manual-content ol {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding-left: 20px;
+  color: #42515d;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .settings-block {
   display: grid;
   gap: 10px;
@@ -966,5 +998,9 @@ dd {
   .settings-actions,
   .settings-form {
     display: grid;
+  }
+
+  .manual-content {
+    grid-template-columns: 1fr;
   }
 }

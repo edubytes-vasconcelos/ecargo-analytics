@@ -6,6 +6,9 @@ const studyFormPanel = document.querySelector("#studyFormPanel");
 const studyForm = document.querySelector("#studyForm");
 const settingsForm = document.querySelector("#settingsForm");
 const settingsModal = document.querySelector("#settingsModal");
+const helpModal = document.querySelector("#helpModal");
+const openHelpButton = document.querySelector("#openHelpButton");
+const closeHelpButton = document.querySelector("#closeHelpButton");
 const openSettingsButton = document.querySelector("#openSettingsButton");
 const closeSettingsButton = document.querySelector("#closeSettingsButton");
 const showProjectFormButton = document.querySelector("#showProjectFormButton");
@@ -681,6 +684,12 @@ openSettingsButton.addEventListener("click", () => {
 });
 closeSettingsButton.addEventListener("click", () => {
   settingsModal.hidden = true;
+});
+openHelpButton.addEventListener("click", () => {
+  helpModal.hidden = false;
+});
+closeHelpButton.addEventListener("click", () => {
+  helpModal.hidden = true;
 });
 
 refreshButton.addEventListener("click", loadProjects);
