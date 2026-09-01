@@ -396,7 +396,11 @@ function isSupportViewTicket(row) {
   const status = normalizeFilterText(row.Status);
   const excludedCategories = new Set(supportViewExcludedCategories.map(normalizeFilterText));
   const excludedStatuses = new Set(supportViewExcludedStatuses.map(normalizeFilterText));
-  return !excludedCategories.has(category) && !excludedCategories.has(primaryCategory) && !excludedStatuses.has(status);
+  return !excludedCategories.has(category) && !excludedCategories.has(primaryCategory) && !excludedStatuses.has(status) && !isWaitingApprovalStatus(status);
+}
+
+function isWaitingApprovalStatus(status) {
+  return status.includes("AGUARDANDO APROVACAO");
 }
 
 function openHours(row) {
