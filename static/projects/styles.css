@@ -492,10 +492,15 @@ dt {
   width: 100%;
 }
 
-.summary-actions button[data-action="notes"] {
+.summary-actions button[data-action="notes"],
+.summary-actions button[data-action="edit"] {
   border-color: var(--line);
   background: var(--panel-soft);
   color: var(--brand-dark);
+}
+
+.study-actions {
+  grid-template-columns: 1fr auto;
 }
 
 .summary-actions button[data-action="delete"],
@@ -870,6 +875,13 @@ dd {
 
 .modal-actions {
   justify-content: flex-end;
+}
+
+.modal-form {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin: 0;
 }
 
 .settings-modal {

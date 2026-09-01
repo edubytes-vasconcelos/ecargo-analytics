@@ -24,6 +24,11 @@ const notesModal = document.querySelector("#notesModal");
 const projectNotes = document.querySelector("#projectNotes");
 const closeNotesButton = document.querySelector("#closeNotesButton");
 const saveNotesButton = document.querySelector("#saveNotesButton");
+const studyEditModal = document.querySelector("#studyEditModal");
+const studyEditForm = document.querySelector("#studyEditForm");
+const studyEditName = document.querySelector("#studyEditName");
+const studyEditDescription = document.querySelector("#studyEditDescription");
+const closeStudyEditButton = document.querySelector("#closeStudyEditButton");
 const attentionDelayInput = document.querySelector("#attentionDelayInput");
 const negativeVarianceInput = document.querySelector("#negativeVarianceInput");
 const criteriaDescription = document.querySelector("#criteriaDescription");
@@ -38,6 +43,7 @@ document.body.appendChild(scheduleUpdateInput);
 let projectsCache = [];
 let projectSettings = { attentionDelayPercent: 10, negativeVarianceAttention: false };
 let notesProjectId = null;
+let studyEditProjectId = null;
 let scheduleUpdateProjectId = null;
 let selectedProjectId = localStorage.getItem("selectedProjectId") || null;
 
@@ -251,6 +257,14 @@ function openNotes(project) {
   notesModal.hidden = false;
 }
 
+function openStudyEditor(project) {
+  studyEditProjectId = project.id;
+  studyEditName.value = project.name || "";
+  studyEditDescription.value = project.description || "";
+  studyEditModal.hidden = false;
+  studyEditName.focus();
+}
+
 function renderTaskFilters(container, state, onChange) {
   container.innerHTML = "";
   const filters = [
@@ -363,10 +377,12 @@ function renderDashboard(projects) {
           <span class="summary-status study">Em estudo</span>
         </div>
         <div class="note-preview">${escapeHtml(project.description || "Projeto em estudo aguardando definição de escopo, cronograma ou priorização.")}</div>
-        <div class="summary-actions">
+        <div class="summary-actions study-actions">
+          <button type="button" data-action="edit">Editar estudo</button>
           <button type="button" data-action="delete">Excluir</button>
         </div>
       `;
+      card.querySelector("[data-action='edit']").addEventListener("click", () => openStudyEditor(project));
       card.querySelector("[data-action='delete']").addEventListener("click", () => deleteProject(project.id));
       projectsEl.appendChild(card);
       continue;
@@ -674,6 +690,30 @@ closeReportButton.addEventListener("click", () => {
 closeNotesButton.addEventListener("click", () => {
   notesModal.hidden = true;
   notesProjectId = null;
+});
+closeStudyEditButton.addEventListener("click", () => {
+  studyEditModal.hidden = true;
+  studyEditProjectId = null;
+});
+studyEditForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!studyEditProjectId) return;
+  const response = await fetch(`${appBasePath}/api/projects/${studyEditProjectId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: studyEditName.value.trim(),
+      description: studyEditDescription.value.trim(),
+    }),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    alert(body.error || "Nao foi possivel salvar o estudo.");
+    return;
+  }
+  studyEditModal.hidden = true;
+  studyEditProjectId = null;
+  await loadProjects();
 });
 saveNotesButton.addEventListener("click", async () => {
   if (!notesProjectId) return;

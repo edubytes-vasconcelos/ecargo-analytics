@@ -220,6 +220,28 @@
       </div>
     </div>
 
-    <script src="__BASE_PATH__/projects/app.js?v=11"></script>
+    <div id="studyEditModal" class="modal" hidden>
+      <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="studyEditTitle">
+        <div class="modal-header">
+          <h2 id="studyEditTitle">Editar estudo</h2>
+          <button id="closeStudyEditButton" type="button" title="Fechar">Fechar</button>
+        </div>
+        <form id="studyEditForm" class="modal-form">
+          <label>
+            Título
+            <input id="studyEditName" name="title" autocomplete="off" required />
+          </label>
+          <label>
+            Descrição
+            <textarea id="studyEditDescription" name="description" rows="8"></textarea>
+          </label>
+          <div class="modal-actions">
+            <button type="submit">Salvar estudo</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script src="__BASE_PATH__/projects/app.js?v=12"></script>
   </body>
 </html>
