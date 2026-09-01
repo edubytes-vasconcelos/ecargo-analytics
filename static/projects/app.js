@@ -372,7 +372,7 @@ function renderDashboard(projects) {
         <div class="summary-head">
           <div>
             <h3>${escapeHtml(project.name)}</h3>
-            <p>${escapeHtml(project.description || "Sem descrição informada.")}</p>
+            <p>Projeto em estudo</p>
           </div>
           <span class="summary-status study">Em estudo</span>
         </div>
