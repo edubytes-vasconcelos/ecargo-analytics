@@ -328,9 +328,32 @@ textarea {
   margin-bottom: 14px;
 }
 
-.project-grid {
+.project-grid,
+.dashboard-sections {
   display: grid;
   gap: 18px;
+}
+
+.dashboard-section {
+  display: grid;
+  gap: 10px;
+}
+
+.dashboard-section-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dashboard-section-head h3 {
+  font-size: 16px;
+}
+
+.dashboard-section-head span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
 }
 
 .dashboard-grid {
@@ -362,6 +385,20 @@ textarea {
 
 .summary-card.study {
   border-top-color: var(--blue);
+}
+
+.summary-card[draggable="true"] {
+  cursor: grab;
+}
+
+.summary-card[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.summary-card.dragging {
+  opacity: 0.58;
+  outline: 2px dashed rgba(15, 111, 124, 0.36);
+  outline-offset: 3px;
 }
 
 .summary-head,
@@ -971,6 +1008,7 @@ dd {
   }
 
   .section-heading,
+  .dashboard-section-head,
   .card-header,
   .task-title {
     align-items: stretch;

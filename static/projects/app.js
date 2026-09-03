@@ -49,6 +49,8 @@ let notesProjectId = null;
 let studyEditProjectId = null;
 let scheduleUpdateProjectId = null;
 let selectedProjectId = localStorage.getItem("selectedProjectId") || null;
+let draggedDashboardCard = null;
+const dashboardOrderKey = "ecargo.projects.dashboardOrder";
 
 function formatDate(value, withTime = false) {
   if (!value) return "Nao informado";
@@ -359,7 +361,7 @@ function renderTasks(container, tasks = [], state = { filter: "all", collapsed: 
 
 function renderDashboard(projects) {
   dashboardTitle.textContent = "Dashboard";
-  projectsEl.className = "dashboard-grid";
+  projectsEl.className = "dashboard-sections";
   projectsEl.innerHTML = "";
 
   if (!projects.length) {
@@ -367,63 +369,168 @@ function renderDashboard(projects) {
     return;
   }
 
-  for (const project of projects) {
-    if (isStudyProject(project)) {
-      const card = document.createElement("article");
-      card.className = "summary-card study";
-      card.innerHTML = `
-        <div class="summary-head">
-          <div>
-            <h3>${escapeHtml(project.name)}</h3>
-            <p>Projeto em estudo</p>
-          </div>
-          <span class="summary-status study">Em estudo</span>
-        </div>
-        <div class="note-preview">${escapeHtml(project.description || "Projeto em estudo aguardando definição de escopo, cronograma ou priorização.")}</div>
-        <div class="summary-actions study-actions">
-          <button type="button" data-action="edit">Editar estudo</button>
-          <button type="button" data-action="delete">Excluir</button>
-        </div>
-      `;
-      card.querySelector("[data-action='edit']").addEventListener("click", () => openStudyEditor(project));
-      card.querySelector("[data-action='delete']").addEventListener("click", () => deleteProject(project.id));
-      projectsEl.appendChild(card);
-      continue;
-    }
+  const ordered = orderedDashboardProjects(projects);
+  renderDashboardSection("Projetos", ordered.projects, "projects");
+  renderDashboardSection("Estudos", ordered.studies, "studies");
+}
 
-    const { dashboard, realized, planned, variance, selectedFile } = getDashboardNumbers(project);
-    const card = document.createElement("article");
-    const riskClass = projectRiskClass(dashboard, variance);
-    const notes = String(project.notes || "").trim();
-    card.className = `summary-card ${riskClass}`;
-    card.innerHTML = `
-      <div class="summary-head">
-        <div>
-          <h3>${escapeHtml(project.name)}</h3>
-          <p>${escapeHtml(selectedFile?.name || "Nenhum cronograma localizado")}</p>
-        </div>
-        <span class="summary-status ${riskClass}">${dashboard.status === "parsed" ? projectRiskLabel(dashboard, variance) : "Falha"}</span>
-      </div>
-      <div class="summary-kpis">
-        <div><span>Planejado</span><strong>${planned}%</strong></div>
-        <div><span>Realizado</span><strong>${realized}%</strong></div>
-        <div><span>Desvio</span><strong>${variance > 0 ? "+" : ""}${variance} p.p.</strong></div>
-      </div>
-      ${notes ? `<div class="note-preview">${escapeHtml(notes)}</div>` : ""}
-      <div class="summary-progress">
-        <span style="width:${Math.max(0, Math.min(100, realized))}%"></span>
-      </div>
-      <div class="summary-actions">
-        <button type="button" data-action="open">Abrir projeto</button>
-        <button type="button" data-action="update">Atualizar cronograma</button>
-        <button type="button" data-action="notes">Informações</button>
-      </div>
-    `;
-    card.querySelector("[data-action='open']").addEventListener("click", () => openProject(project.id));
-    card.querySelector("[data-action='update']").addEventListener("click", () => chooseScheduleUpdate(project.id));
-    card.querySelector("[data-action='notes']").addEventListener("click", () => openNotes(project));
-    projectsEl.appendChild(card);
+function renderDashboardSection(title, items, group) {
+  if (!items.length) return;
+
+  const section = document.createElement("section");
+  section.className = "dashboard-section";
+  section.innerHTML = `
+    <div class="dashboard-section-head">
+      <h3>${title}</h3>
+      <span>Ordem manual</span>
+    </div>
+    <div class="dashboard-grid sortable-grid" data-order-group="${group}"></div>
+  `;
+  const grid = section.querySelector(".dashboard-grid");
+
+  for (const project of items) {
+    grid.appendChild(isStudyProject(project) ? createStudyCard(project) : createProjectCard(project));
   }
+
+  enableDashboardSorting(grid);
+  projectsEl.appendChild(section);
+}
+
+function createStudyCard(project) {
+  const card = createDashboardCard(project, "study");
+  card.innerHTML = `
+    <div class="summary-head">
+      <div>
+        <h3>${escapeHtml(project.name)}</h3>
+        <p>Projeto em estudo</p>
+      </div>
+      <span class="summary-status study">Em estudo</span>
+    </div>
+    <div class="note-preview">${escapeHtml(project.description || "Projeto em estudo aguardando definição de escopo, cronograma ou priorização.")}</div>
+    <div class="summary-actions study-actions">
+      <button type="button" data-action="edit">Editar estudo</button>
+      <button type="button" data-action="delete">Excluir</button>
+    </div>
+  `;
+  card.querySelector("[data-action='edit']").addEventListener("click", () => openStudyEditor(project));
+  card.querySelector("[data-action='delete']").addEventListener("click", () => deleteProject(project.id));
+  return card;
+}
+
+function createProjectCard(project) {
+  const { dashboard, realized, planned, variance, selectedFile } = getDashboardNumbers(project);
+  const riskClass = projectRiskClass(dashboard, variance);
+  const notes = String(project.notes || "").trim();
+  const card = createDashboardCard(project, riskClass);
+  card.innerHTML = `
+    <div class="summary-head">
+      <div>
+        <h3>${escapeHtml(project.name)}</h3>
+        <p>${escapeHtml(selectedFile?.name || "Nenhum cronograma localizado")}</p>
+      </div>
+      <span class="summary-status ${riskClass}">${dashboard.status === "parsed" ? projectRiskLabel(dashboard, variance) : "Falha"}</span>
+    </div>
+    <div class="summary-kpis">
+      <div><span>Planejado</span><strong>${planned}%</strong></div>
+      <div><span>Realizado</span><strong>${realized}%</strong></div>
+      <div><span>Desvio</span><strong>${variance > 0 ? "+" : ""}${variance} p.p.</strong></div>
+    </div>
+    ${notes ? `<div class="note-preview">${escapeHtml(notes)}</div>` : ""}
+    <div class="summary-progress">
+      <span style="width:${Math.max(0, Math.min(100, realized))}%"></span>
+    </div>
+    <div class="summary-actions">
+      <button type="button" data-action="open">Abrir projeto</button>
+      <button type="button" data-action="update">Atualizar cronograma</button>
+      <button type="button" data-action="notes">Informações</button>
+    </div>
+  `;
+  card.querySelector("[data-action='open']").addEventListener("click", () => openProject(project.id));
+  card.querySelector("[data-action='update']").addEventListener("click", () => chooseScheduleUpdate(project.id));
+  card.querySelector("[data-action='notes']").addEventListener("click", () => openNotes(project));
+  return card;
+}
+
+function createDashboardCard(project, className) {
+  const card = document.createElement("article");
+  card.className = `summary-card ${className}`;
+  card.draggable = true;
+  card.dataset.id = project.id;
+  card.dataset.orderGroup = isStudyProject(project) ? "studies" : "projects";
+  card.title = "Arraste para organizar";
+  return card;
+}
+
+function orderedDashboardProjects(projects) {
+  const order = readDashboardOrder();
+  return {
+    projects: orderBySavedPosition(projects.filter((project) => !isStudyProject(project)), order.projects),
+    studies: orderBySavedPosition(projects.filter(isStudyProject), order.studies),
+  };
+}
+
+function orderBySavedPosition(items, savedIds = []) {
+  const position = new Map(savedIds.map((id, index) => [String(id), index]));
+  return [...items].sort((a, b) => {
+    const left = position.has(String(a.id)) ? position.get(String(a.id)) : Number.MAX_SAFE_INTEGER;
+    const right = position.has(String(b.id)) ? position.get(String(b.id)) : Number.MAX_SAFE_INTEGER;
+    return left - right;
+  });
+}
+
+function readDashboardOrder() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(dashboardOrderKey) || "{}");
+    return {
+      projects: Array.isArray(parsed.projects) ? parsed.projects : [],
+      studies: Array.isArray(parsed.studies) ? parsed.studies : [],
+    };
+  } catch {
+    return { projects: [], studies: [] };
+  }
+}
+
+function saveDashboardOrder(group, grid) {
+  const order = readDashboardOrder();
+  order[group] = [...grid.querySelectorAll(".summary-card")].map((card) => card.dataset.id);
+  localStorage.setItem(dashboardOrderKey, JSON.stringify(order));
+}
+
+function enableDashboardSorting(grid) {
+  grid.addEventListener("dragstart", (event) => {
+    const card = event.target.closest(".summary-card");
+    if (!card) return;
+    draggedDashboardCard = card;
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", card.dataset.id || "");
+    requestAnimationFrame(() => card.classList.add("dragging"));
+  });
+
+  grid.addEventListener("dragover", (event) => {
+    if (!draggedDashboardCard || draggedDashboardCard.dataset.orderGroup !== grid.dataset.orderGroup) return;
+    event.preventDefault();
+    const target = dragTargetCard(grid, event.clientX, event.clientY);
+    if (target) grid.insertBefore(draggedDashboardCard, target);
+    else grid.appendChild(draggedDashboardCard);
+  });
+
+  grid.addEventListener("dragend", () => {
+    if (!draggedDashboardCard) return;
+    draggedDashboardCard.classList.remove("dragging");
+    saveDashboardOrder(grid.dataset.orderGroup, grid);
+    draggedDashboardCard = null;
+  });
+}
+
+function dragTargetCard(grid, x, y) {
+  const cards = [...grid.querySelectorAll(".summary-card:not(.dragging)")];
+  return cards.find((card) => {
+    const box = card.getBoundingClientRect();
+    const beforeRow = y < box.top + box.height / 2;
+    const sameRow = y >= box.top && y <= box.bottom;
+    const beforeColumn = x < box.left + box.width / 2;
+    return beforeRow || (sameRow && beforeColumn);
+  }) || null;
 }
 
 function renderProjectDetail(project) {
