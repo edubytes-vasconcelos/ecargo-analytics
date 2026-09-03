@@ -1684,15 +1684,14 @@ class Handler(BaseHTTPRequestHandler):
                     continue
                 if "notes" in payload:
                     project["notes"] = str(payload.get("notes", "")).strip()
-                if project.get("type") == "study":
-                    if "title" in payload:
-                        title = str(payload.get("title", "")).strip()
-                        if not title:
-                            self._send_json({"error": "Informe o título do projeto em estudo."}, 400)
-                            return
-                        project["name"] = title
-                    if "description" in payload:
-                        project["description"] = str(payload.get("description", "")).strip()
+                if "title" in payload:
+                    title = str(payload.get("title", "")).strip()
+                    if not title:
+                        self._send_json({"error": "Informe o título do projeto."}, 400)
+                        return
+                    project["name"] = title
+                if project.get("type") == "study" and "description" in payload:
+                    project["description"] = str(payload.get("description", "")).strip()
                 project["updatedAt"] = datetime.now().isoformat(timespec="seconds")
                 updated = project
                 break

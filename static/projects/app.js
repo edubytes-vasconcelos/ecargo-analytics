@@ -31,6 +31,7 @@ const studyEditModal = document.querySelector("#studyEditModal");
 const studyEditForm = document.querySelector("#studyEditForm");
 const studyEditName = document.querySelector("#studyEditName");
 const studyEditDescription = document.querySelector("#studyEditDescription");
+const studyEditDescriptionField = document.querySelector("#studyEditDescriptionField");
 const closeStudyEditButton = document.querySelector("#closeStudyEditButton");
 const attentionDelayInput = document.querySelector("#attentionDelayInput");
 const negativeVarianceInput = document.querySelector("#negativeVarianceInput");
@@ -47,6 +48,7 @@ let projectsCache = [];
 let projectSettings = { attentionDelayPercent: 10, negativeVarianceAttention: false };
 let notesProjectId = null;
 let studyEditProjectId = null;
+let editingProject = null;
 let scheduleUpdateProjectId = null;
 let selectedProjectId = localStorage.getItem("selectedProjectId") || null;
 let draggedDashboardCard = null;
@@ -263,9 +265,11 @@ function openNotes(project) {
 }
 
 function openStudyEditor(project) {
+  editingProject = project;
   studyEditProjectId = project.id;
   studyEditName.value = project.name || "";
   studyEditDescription.value = project.description || "";
+  studyEditDescriptionField.hidden = !isStudyProject(project);
   studyEditModal.hidden = false;
   studyEditName.focus();
 }
@@ -441,11 +445,13 @@ function createProjectCard(project) {
     </div>
     <div class="summary-actions">
       <button type="button" data-action="open">Abrir projeto</button>
+      <button type="button" data-action="edit">Editar título</button>
       <button type="button" data-action="update">Atualizar cronograma</button>
       <button type="button" data-action="notes">Informações</button>
     </div>
   `;
   card.querySelector("[data-action='open']").addEventListener("click", () => openProject(project.id));
+  card.querySelector("[data-action='edit']").addEventListener("click", () => openStudyEditor(project));
   card.querySelector("[data-action='update']").addEventListener("click", () => chooseScheduleUpdate(project.id));
   card.querySelector("[data-action='notes']").addEventListener("click", () => openNotes(project));
   return card;
@@ -570,6 +576,7 @@ function renderProjectDetail(project) {
   node.querySelector("[data-field='message']").className = `status-line ${statusClass(dashboard.status)}`;
   node.querySelector("[data-action='back']").addEventListener("click", showDashboard);
   node.querySelector("[data-action='delete']").addEventListener("click", () => deleteProject(project.id));
+  node.querySelector("[data-action='edit']").addEventListener("click", () => openStudyEditor(project));
   node.querySelector("[data-action='report']").addEventListener("click", () => openStatusReport(project));
   node.querySelector("[data-action='update']").addEventListener("click", () => chooseScheduleUpdate(project.id));
   node.querySelector("[data-action='notes']").addEventListener("click", () => openNotes(project));
@@ -810,25 +817,28 @@ closeNotesButton.addEventListener("click", () => {
 closeStudyEditButton.addEventListener("click", () => {
   studyEditModal.hidden = true;
   studyEditProjectId = null;
+  editingProject = null;
 });
 studyEditForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  if (!studyEditProjectId) return;
+  if (!studyEditProjectId || !editingProject) return;
+  const payload = { title: studyEditName.value.trim() };
+  if (isStudyProject(editingProject)) {
+    payload.description = studyEditDescription.value.trim();
+  }
   const response = await fetch(`${appBasePath}/api/projects/${studyEditProjectId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      title: studyEditName.value.trim(),
-      description: studyEditDescription.value.trim(),
-    }),
+    body: JSON.stringify(payload),
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
-    alert(body.error || "Nao foi possivel salvar o estudo.");
+    alert(body.error || "Nao foi possivel salvar o cadastro.");
     return;
   }
   studyEditModal.hidden = true;
   studyEditProjectId = null;
+  editingProject = null;
   await loadProjects();
 });
 saveNotesButton.addEventListener("click", async () => {
