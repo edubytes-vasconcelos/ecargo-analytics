@@ -365,7 +365,7 @@ textarea {
 
 .summary-card {
   display: grid;
-  grid-template-rows: auto auto auto 1fr auto;
+  align-content: start;
   min-width: 0;
   padding: 15px;
   border-top: 4px solid var(--blue);
@@ -520,13 +520,17 @@ dt {
 
 .summary-actions {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   margin-top: 12px;
 }
 
 .summary-actions button {
   width: 100%;
+  min-height: 42px;
+  padding: 0 10px;
+  text-align: center;
+  white-space: normal;
 }
 
 .summary-actions button[data-action="notes"],
@@ -537,7 +541,7 @@ dt {
 }
 
 .study-actions {
-  grid-template-columns: 1fr auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .summary-actions button[data-action="delete"],
