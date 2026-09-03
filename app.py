@@ -1517,7 +1517,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = self._route_path()
-        if path.startswith("/api/projects/") and path.endswith("/upload"):
+        if path.startswith("/api/projects/") and path.endswith("/upload") and path.count("/") == 4:
             project_id = path.split("/")[-2]
             try:
                 _fields, file_item = _read_form_data(self.headers, self.rfile)
