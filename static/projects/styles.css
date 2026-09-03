@@ -73,7 +73,8 @@ button:hover,
   padding: 0;
 }
 
-.icon-button svg {
+.icon-button svg,
+.title-edit-button svg {
   width: 18px;
   height: 18px;
   fill: none;
@@ -420,10 +421,38 @@ textarea {
   gap: 12px;
 }
 
+.summary-title-block,
+.detail-title-block {
+  min-width: 0;
+}
+
+.title-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  align-items: start;
+  gap: 8px;
+}
+
 .summary-head h3 {
   min-height: 45px;
   font-size: 18px;
   line-height: 1.25;
+}
+
+.title-edit-button {
+  width: 34px;
+  min-width: 34px;
+  min-height: 34px;
+  padding: 0;
+  border-color: var(--line);
+  background: var(--panel-soft);
+  color: var(--brand-dark);
+}
+
+.title-edit-button:hover {
+  border-color: var(--brand-dark);
+  background: var(--brand-dark);
+  color: #fff;
 }
 
 .summary-head p,
@@ -533,7 +562,7 @@ dt {
 
 .summary-actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   margin-top: auto;
   padding-top: 12px;
@@ -547,19 +576,18 @@ dt {
   white-space: normal;
 }
 
-.summary-actions button[data-action="notes"],
-.summary-actions button[data-action="edit"] {
+.summary-actions button[data-action="notes"] {
   border-color: var(--line);
   background: var(--panel-soft);
   color: var(--brand-dark);
 }
 
 .study-actions {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .construction-actions {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .summary-actions button[data-action="delete"],

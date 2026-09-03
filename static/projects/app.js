@@ -175,6 +175,18 @@ function projectSource(project) {
   return project.uploadedSchedule?.name || project.sharepointUrl || project.folderPath || "";
 }
 
+function editTitleButtonHtml(label) {
+  const safeLabel = escapeHtml(label);
+  return `
+    <button type="button" class="title-edit-button" data-action="edit" title="${safeLabel}" aria-label="${safeLabel}">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 20h9" />
+        <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" />
+      </svg>
+    </button>
+  `;
+}
+
 function projectRiskClass(dashboard, variance) {
   if ((dashboard.lateTasks ?? 0) > 0) return "late";
   if ((dashboard.attentionTasks ?? 0) > 0 || (projectSettings.negativeVarianceAttention && variance < 0)) return "risk";
@@ -408,15 +420,17 @@ function createStudyCard(project) {
   const card = createDashboardCard(project, "study");
   card.innerHTML = `
     <div class="summary-head">
-      <div>
-        <h3>${escapeHtml(project.name)}</h3>
+      <div class="summary-title-block">
+        <div class="title-row">
+          <h3>${escapeHtml(project.name)}</h3>
+          ${editTitleButtonHtml("Editar estudo")}
+        </div>
         <p>Projeto em estudo</p>
       </div>
       <span class="summary-status study">Em estudo</span>
     </div>
     <div class="note-preview">${escapeHtml(project.description || "Projeto em estudo aguardando definição de escopo, cronograma ou priorização.")}</div>
     <div class="summary-actions study-actions">
-      <button type="button" data-action="edit">Editar estudo</button>
       <button type="button" data-action="delete">Excluir</button>
     </div>
   `;
@@ -429,15 +443,17 @@ function createConstructionCard(project) {
   const card = createDashboardCard(project, "construction");
   card.innerHTML = `
     <div class="summary-head">
-      <div>
-        <h3>${escapeHtml(project.name)}</h3>
+      <div class="summary-title-block">
+        <div class="title-row">
+          <h3>${escapeHtml(project.name)}</h3>
+          ${editTitleButtonHtml("Editar título")}
+        </div>
         <p>Projeto sem cronograma</p>
       </div>
       <span class="summary-status construction">Em construção</span>
     </div>
     <div class="note-preview">${escapeHtml(project.notes || "Projeto em construção aguardando cronograma ou definição complementar.")}</div>
     <div class="summary-actions construction-actions">
-      <button type="button" data-action="edit">Editar título</button>
       <button type="button" data-action="notes">Informações</button>
       <button type="button" data-action="delete">Excluir</button>
     </div>
@@ -455,8 +471,11 @@ function createProjectCard(project) {
   const card = createDashboardCard(project, riskClass);
   card.innerHTML = `
     <div class="summary-head">
-      <div>
-        <h3>${escapeHtml(project.name)}</h3>
+      <div class="summary-title-block">
+        <div class="title-row">
+          <h3>${escapeHtml(project.name)}</h3>
+          ${editTitleButtonHtml("Editar título")}
+        </div>
         <p>${escapeHtml(selectedFile?.name || "Nenhum cronograma localizado")}</p>
       </div>
       <span class="summary-status ${riskClass}">${dashboard.status === "parsed" ? projectRiskLabel(dashboard, variance) : "Falha"}</span>
@@ -472,7 +491,6 @@ function createProjectCard(project) {
     </div>
     <div class="summary-actions">
       <button type="button" data-action="open">Abrir projeto</button>
-      <button type="button" data-action="edit">Editar título</button>
       <button type="button" data-action="update">Atualizar cronograma</button>
       <button type="button" data-action="notes">Informações</button>
     </div>

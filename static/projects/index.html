@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Portal E-Cargo | Projetos</title>
-    <link rel="stylesheet" href="__BASE_PATH__/projects/styles.css?v=5" />
+    <link rel="stylesheet" href="__BASE_PATH__/projects/styles.css?v=6" />
   </head>
   <body>
     <header class="topbar">
@@ -87,12 +87,19 @@
     <template id="projectTemplate">
       <article class="project-card">
         <div class="card-header">
-          <div>
-            <h3 data-field="name"></h3>
+          <div class="detail-title-block">
+            <div class="title-row detail-title-row">
+              <h3 data-field="name"></h3>
+              <button type="button" class="title-edit-button" data-action="edit" title="Editar título do projeto" aria-label="Editar título do projeto">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 20h9" />
+                  <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" />
+                </svg>
+              </button>
+            </div>
             <p data-field="folder"></p>
           </div>
           <div class="header-actions">
-            <button type="button" data-action="edit" title="Editar título do projeto">Editar título</button>
             <button type="button" data-action="report" title="Gerar e-mail de status">Gerar status report</button>
             <button type="button" data-action="update" title="Atualizar cronograma do projeto">Atualizar cronograma</button>
             <button type="button" data-action="notes" title="Adicionar informações do projeto">Informações</button>
@@ -195,7 +202,7 @@
           <section>
             <h3>Estudos</h3>
             <ol>
-              <li>Use Editar estudo para alterar título e descrição.</li>
+              <li>Use o ícone de lápis ao lado do título para alterar título e descrição.</li>
               <li>Quando o projeto sair da fase de estudo, cadastre-o como projeto com cronograma.</li>
               <li>Use Excluir apenas quando o estudo não precisar mais aparecer no painel.</li>
             </ol>
@@ -203,7 +210,7 @@
           <section>
             <h3>Acompanhamento</h3>
             <ol>
-              <li>Use Editar título para renomear projetos já cadastrados.</li>
+              <li>Use o ícone de lápis ao lado do título para renomear projetos já cadastrados.</li>
               <li>Abra um projeto para ver tarefas, planejado, realizado, desvio, atrasos e pontos de atenção.</li>
               <li>Use os filtros de tarefas para focar em Atenção, Atrasadas ou Em andamento.</li>
               <li>Atualizar cronograma substitui o arquivo usado nas métricas do projeto.</li>
@@ -292,6 +299,6 @@
       </div>
     </div>
 
-    <script src="__BASE_PATH__/projects/app.js?v=16"></script>
+    <script src="__BASE_PATH__/projects/app.js?v=17"></script>
   </body>
 </html>
