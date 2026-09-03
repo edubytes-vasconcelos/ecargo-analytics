@@ -364,8 +364,8 @@ textarea {
 }
 
 .summary-card {
-  display: grid;
-  align-content: start;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   padding: 15px;
   border-top: 4px solid var(--blue);
@@ -522,7 +522,8 @@ dt {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
-  margin-top: 12px;
+  margin-top: auto;
+  padding-top: 12px;
 }
 
 .summary-actions button {
