@@ -167,6 +167,10 @@ function isStudyProject(project) {
   return project.type === "study";
 }
 
+function isConstructionProject(project) {
+  return project.type === "construction";
+}
+
 function projectSource(project) {
   return project.uploadedSchedule?.name || project.sharepointUrl || project.folderPath || "";
 }
@@ -393,7 +397,7 @@ function renderDashboardSection(title, items, group) {
   const grid = section.querySelector(".dashboard-grid");
 
   for (const project of items) {
-    grid.appendChild(isStudyProject(project) ? createStudyCard(project) : createProjectCard(project));
+    grid.appendChild(isStudyProject(project) ? createStudyCard(project) : isConstructionProject(project) ? createConstructionCard(project) : createProjectCard(project));
   }
 
   enableDashboardSorting(grid);
@@ -417,6 +421,29 @@ function createStudyCard(project) {
     </div>
   `;
   card.querySelector("[data-action='edit']").addEventListener("click", () => openStudyEditor(project));
+  card.querySelector("[data-action='delete']").addEventListener("click", () => deleteProject(project.id));
+  return card;
+}
+
+function createConstructionCard(project) {
+  const card = createDashboardCard(project, "construction");
+  card.innerHTML = `
+    <div class="summary-head">
+      <div>
+        <h3>${escapeHtml(project.name)}</h3>
+        <p>Projeto sem cronograma</p>
+      </div>
+      <span class="summary-status construction">Em construção</span>
+    </div>
+    <div class="note-preview">${escapeHtml(project.notes || "Projeto em construção aguardando cronograma ou definição complementar.")}</div>
+    <div class="summary-actions construction-actions">
+      <button type="button" data-action="edit">Editar título</button>
+      <button type="button" data-action="notes">Informações</button>
+      <button type="button" data-action="delete">Excluir</button>
+    </div>
+  `;
+  card.querySelector("[data-action='edit']").addEventListener("click", () => openStudyEditor(project));
+  card.querySelector("[data-action='notes']").addEventListener("click", () => openNotes(project));
   card.querySelector("[data-action='delete']").addEventListener("click", () => deleteProject(project.id));
   return card;
 }
@@ -689,6 +716,7 @@ form.addEventListener("submit", async (event) => {
   event.preventDefault();
   const name = document.querySelector("#projectName").value.trim();
   const source = document.querySelector("#folderPath").value.trim();
+  const info = document.querySelector("#projectInfo").value.trim();
   const file = document.querySelector("#scheduleFile").files[0];
   let response;
 
@@ -700,16 +728,18 @@ form.addEventListener("submit", async (event) => {
     const formData = new FormData();
     formData.append("name", name);
     formData.append("file", file);
+    if (info) formData.append("notes", info);
     response = await fetch(`${appBasePath}/api/projects/upload`, {
       method: "POST",
       body: formData,
     });
   } else {
     const payload = { name };
-    if (!source) {
-      alert("Informe uma pasta, URL do SharePoint ou envie um arquivo.");
+    if (!source && !info) {
+      alert("Informe uma pasta, URL do SharePoint, envie um arquivo ou preencha as informações do projeto.");
       return;
     }
+    if (info) payload.notes = info;
     if (/^https?:\/\//i.test(source)) {
       payload.sharepointUrl = source;
     } else {

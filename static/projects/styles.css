@@ -307,6 +307,10 @@ input[type="file"] {
   padding: 8px 10px;
 }
 
+.wide-field {
+  grid-column: 1 / -1;
+}
+
 textarea {
   width: 100%;
   border: 1px solid var(--line);
@@ -387,6 +391,10 @@ textarea {
   border-top-color: var(--blue);
 }
 
+.summary-card.construction {
+  border-top-color: var(--amber);
+}
+
 .summary-card[draggable="true"] {
   cursor: grab;
 }
@@ -451,6 +459,11 @@ textarea {
 .summary-status.study {
   background: #eef6fb;
   color: var(--blue);
+}
+
+.summary-status.construction {
+  background: #fff3e8;
+  color: var(--amber);
 }
 
 .summary-kpis,
@@ -543,6 +556,10 @@ dt {
 
 .study-actions {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.construction-actions {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .summary-actions button[data-action="delete"],

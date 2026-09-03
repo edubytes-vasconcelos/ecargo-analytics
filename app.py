@@ -1375,6 +1375,13 @@ def inspect_project(project: dict, settings: dict | None = None) -> dict:
             "sourceType": "study",
             "attentionDelayPercent": int((settings or read_project_settings()).get("attentionDelayPercent", 10)),
         }
+    if project.get("type") == "construction":
+        return {
+            "status": "construction",
+            "message": "Projeto em construção, sem cronograma vinculado.",
+            "sourceType": "construction",
+            "attentionDelayPercent": int((settings or read_project_settings()).get("attentionDelayPercent", 10)),
+        }
 
     settings = settings or read_project_settings()
     uploaded_schedule = project.get("uploadedSchedule") or {}
@@ -1556,8 +1563,12 @@ class Handler(BaseHTTPRequestHandler):
                 name = str(payload.get("name", "")).strip()
                 folder_path = str(payload.get("folderPath", "")).strip()
                 sharepoint_url = str(payload.get("sharepointUrl", "")).strip()
-                if not name or not (folder_path or sharepoint_url):
-                    self._send_json({"error": "Informe o nome do projeto e uma pasta local ou URL do SharePoint."}, 400)
+                notes = str(payload.get("notes", "")).strip()
+                if not name:
+                    self._send_json({"error": "Informe o nome do projeto."}, 400)
+                    return
+                if not (folder_path or sharepoint_url or notes):
+                    self._send_json({"error": "Informe uma origem de cronograma ou as informações do projeto em construção."}, 400)
                     return
                 if folder_path and sharepoint_url:
                     self._send_json({"error": "Informe apenas uma origem: pasta local ou URL do SharePoint."}, 400)
@@ -1573,10 +1584,14 @@ class Handler(BaseHTTPRequestHandler):
                     "name": name,
                     "createdAt": datetime.now().isoformat(timespec="seconds"),
                 }
+                if notes:
+                    project["notes"] = notes
                 if sharepoint_url:
                     project["sharepointUrl"] = sharepoint_url
-                else:
+                elif folder_path:
                     project["folderPath"] = folder_path
+                else:
+                    project["type"] = "construction"
                 projects.append(project)
                 write_projects(projects)
                 self._send_json({**project, "dashboard": inspect_project(project)}, 201)
@@ -1588,6 +1603,7 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 fields, file_item = _read_form_data(self.headers, self.rfile)
                 name = str(fields.get("name", "")).strip()
+                notes = str(fields.get("notes", "")).strip()
                 if not name:
                     self._send_json({"error": "Informe o nome do projeto."}, 400)
                     return
@@ -1603,6 +1619,8 @@ class Handler(BaseHTTPRequestHandler):
                     "uploadedSchedule": uploaded,
                     "createdAt": datetime.now().isoformat(timespec="seconds"),
                 }
+                if notes:
+                    project["notes"] = notes
                 projects.append(project)
                 write_projects(projects)
                 self._send_json({**project, "dashboard": inspect_project(project)}, 201)

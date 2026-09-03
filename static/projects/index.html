@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Portal E-Cargo | Projetos</title>
-    <link rel="stylesheet" href="__BASE_PATH__/projects/styles.css?v=4" />
+    <link rel="stylesheet" href="__BASE_PATH__/projects/styles.css?v=5" />
   </head>
   <body>
     <header class="topbar">
@@ -48,9 +48,13 @@
             Upload do cronograma
             <input id="scheduleFile" name="scheduleFile" type="file" accept=".xml,.mpp,.mpt" />
           </label>
+          <label class="wide-field">
+            Informações
+            <textarea id="projectInfo" name="notes" rows="3" placeholder="Resumo, escopo ou status inicial do projeto"></textarea>
+          </label>
           <button type="submit">Adicionar projeto</button>
         </form>
-        <p class="hint">Envie `.xml`, `.mpp` ou `.mpt`. Arquivos do Project são convertidos para XML automaticamente antes da leitura das métricas.</p>
+        <p class="hint">Envie `.xml`, `.mpp` ou `.mpt` quando houver cronograma. Sem cronograma, informe nome e informações para cadastrar como Em construção.</p>
       </section>
 
       <section id="studyFormPanel" class="register-panel study-panel" aria-labelledby="study-title" hidden>
@@ -184,7 +188,7 @@
             <h3>Cadastro</h3>
             <ol>
               <li>Abra Configurações e escolha Cadastrar projeto para acompanhar um cronograma.</li>
-              <li>Informe o nome e envie um arquivo .xml, .mpp ou .mpt, ou indique uma pasta local ou URL do SharePoint.</li>
+              <li>Informe o nome e envie um arquivo .xml, .mpp ou .mpt, indique uma origem, ou preencha Informações para cadastrar como Em construção.</li>
               <li>Use Cadastrar projeto em estudo quando ainda não houver cronograma definido.</li>
             </ol>
           </section>
@@ -288,6 +292,6 @@
       </div>
     </div>
 
-    <script src="__BASE_PATH__/projects/app.js?v=15"></script>
+    <script src="__BASE_PATH__/projects/app.js?v=16"></script>
   </body>
 </html>
