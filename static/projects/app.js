@@ -739,10 +739,7 @@ function buildExecutiveReport() {
         <div><span>Em construção</span><strong>${constructionProjects.length}</strong></div>
         <div><span>Em estudo</span><strong>${studies.length}</strong></div>
       </div>
-      <div class="report-narrative">
-        <p>Avanço médio planejado de ${averagePlanned}% contra ${averageRealized}% realizado, com desvio consolidado de ${averageVariance > 0 ? "+" : ""}${averageVariance} p.p.</p>
-        <p>${lateProjects.length || riskProjects.length ? "A carteira possui pontos que exigem acompanhamento ativo de prazo e responsáveis." : "A carteira acompanhada não apresenta atrasos ou desvios críticos no momento."}</p>
-      </div>
+      <p class="report-summary-line">Consolidado dos projetos com cronograma: planejado ${averagePlanned}%, realizado ${averageRealized}%, desvio ${averageVariance > 0 ? "+" : ""}${averageVariance} p.p.</p>
     </section>
 
     <section class="report-section">
