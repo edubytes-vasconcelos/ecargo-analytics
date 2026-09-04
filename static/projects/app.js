@@ -225,11 +225,11 @@ function generateStatusReport(project) {
   const attentionTasks = tasks.filter((task) => task.attention && !task.late && !task.summary);
   const inProgressTasks = tasks.filter((task) => task.inProgress && !task.summary);
   const status = projectRiskLabel(dashboard, variance);
-  const subject = `Status do projeto - ${project.name} - ${status}`;
+  const subject = `Status da evolutiva - ${project.name} - ${status}`;
   const lines = [
     "Olá,",
     "",
-    `Segue status atualizado do projeto ${project.name}.`,
+    `Segue status atualizado da evolutiva ${project.name}.`,
     "",
     "Resumo executivo:",
     `- Status geral: ${status}`,
@@ -387,12 +387,12 @@ function renderDashboard(projects) {
   projectsEl.innerHTML = "";
 
   if (!projects.length) {
-    projectsEl.innerHTML = "<p class=\"hint\">Nenhum projeto cadastrado.</p>";
+    projectsEl.innerHTML = "<p class=\"hint\">Nenhuma evolutiva cadastrada.</p>";
     return;
   }
 
   const ordered = orderedDashboardProjects(projects);
-  renderDashboardSection("Projetos", ordered.projects, "projects");
+  renderDashboardSection("Evolutivas", ordered.projects, "projects");
   renderDashboardSection("Estudos", ordered.studies, "studies");
 }
 
@@ -427,11 +427,11 @@ function createStudyCard(project) {
           <h3>${escapeHtml(project.name)}</h3>
           ${editTitleButtonHtml("Editar estudo")}
         </div>
-        <p>Projeto em estudo</p>
+        <p>Evolutiva em estudo</p>
       </div>
       <span class="summary-status study">Em estudo</span>
     </div>
-    <div class="note-preview">${escapeHtml(project.description || "Projeto em estudo aguardando definição de escopo, cronograma ou priorização.")}</div>
+    <div class="note-preview">${escapeHtml(project.description || "Evolutiva em estudo aguardando definição de escopo, cronograma ou priorização.")}</div>
     <div class="summary-actions study-actions">
       <button type="button" data-action="delete">Excluir</button>
     </div>
@@ -450,11 +450,11 @@ function createConstructionCard(project) {
           <h3>${escapeHtml(project.name)}</h3>
           ${editTitleButtonHtml("Editar título")}
         </div>
-        <p>Projeto sem cronograma</p>
+        <p>Evolutiva sem cronograma</p>
       </div>
       <span class="summary-status construction">Em construção</span>
     </div>
-    <div class="note-preview">${escapeHtml(project.notes || "Projeto em construção aguardando cronograma ou definição complementar.")}</div>
+    <div class="note-preview">${escapeHtml(project.notes || "Evolutiva em construção aguardando cronograma ou definição complementar.")}</div>
     <div class="summary-actions construction-actions">
       <button type="button" data-action="update">Atualizar cronograma</button>
       <button type="button" data-action="notes">Informações</button>
@@ -494,7 +494,7 @@ function createProjectCard(project) {
       <span style="width:${Math.max(0, Math.min(100, realized))}%"></span>
     </div>
     <div class="summary-actions">
-      <button type="button" data-action="open">Abrir projeto</button>
+      <button type="button" data-action="open">Abrir evolutiva</button>
       <button type="button" data-action="update">Atualizar cronograma</button>
       <button type="button" data-action="notes">Informações</button>
     </div>
@@ -725,29 +725,29 @@ function buildExecutiveReport() {
   executiveReport.innerHTML = `
     <header class="report-cover">
       <span>Portal E-Cargo</span>
-      <h1>Relatório executivo de projetos</h1>
+      <h1>Relatório executivo de evolutivas</h1>
       <p>Visão consolidada para acompanhamento gerencial. Gerado em ${generatedAt}.</p>
     </header>
 
     <section class="report-section">
       <h2>Resumo da carteira</h2>
       <div class="report-kpis">
-        <div><span>Projetos acompanhados</span><strong>${projects.length}</strong></div>
+        <div><span>Evolutivas acompanhadas</span><strong>${projects.length}</strong></div>
         <div><span>Em dia</span><strong>${okProjects.length}</strong></div>
         <div><span>Atrasados</span><strong>${lateProjects.length}</strong></div>
         <div><span>Em atenção</span><strong>${riskProjects.length}</strong></div>
         <div><span>Em construção</span><strong>${constructionProjects.length}</strong></div>
         <div><span>Em estudo</span><strong>${studies.length}</strong></div>
       </div>
-      <p class="report-summary-line">Consolidado dos projetos com cronograma: planejado ${averagePlanned}%, realizado ${averageRealized}%, desvio ${averageVariance > 0 ? "+" : ""}${averageVariance} p.p.</p>
+      <p class="report-summary-line">Consolidado das evolutivas com cronograma: planejado ${averagePlanned}%, realizado ${averageRealized}%, desvio ${averageVariance > 0 ? "+" : ""}${averageVariance} p.p.</p>
     </section>
 
     <section class="report-section">
-      <h2>Projetos</h2>
+      <h2>Evolutivas</h2>
       ${projects.length ? `<table class="report-table">
         <thead>
           <tr>
-            <th>Projeto</th>
+            <th>Evolutiva</th>
             <th>Status</th>
             <th>Plan.</th>
             <th>Real.</th>
@@ -758,7 +758,7 @@ function buildExecutiveReport() {
           </tr>
         </thead>
         <tbody>${executiveReportRows(projects)}</tbody>
-      </table>` : `<p class="report-empty">Nenhum projeto cadastrado.</p>`}
+      </table>` : `<p class="report-empty">Nenhuma evolutiva cadastrada.</p>`}
     </section>
 
     <section class="report-section">
@@ -800,7 +800,7 @@ async function loadProjects() {
   try {
     const response = await fetch(`${appBasePath}/api/projects`);
     const projects = await response.json();
-    if (!response.ok) throw new Error(projects.error || "Falha ao carregar projetos.");
+    if (!response.ok) throw new Error(projects.error || "Falha ao carregar evolutivas.");
     projectsCache = projects;
     renderCurrentView();
     lastUpdate.textContent = `Última verificação: ${formatDate(new Date().toISOString(), true)}`;
@@ -813,7 +813,7 @@ async function loadProjects() {
 
 async function deleteProject(id) {
   const project = projectsCache.find((item) => item.id === id);
-  if (!window.confirm(`Excluir ${project?.name || "este projeto"}?`)) return;
+  if (!window.confirm(`Excluir ${project?.name || "esta evolutiva"}?`)) return;
   await fetch(`${appBasePath}/api/projects/${id}`, { method: "DELETE" });
   if (selectedProjectId === id) {
     selectedProjectId = null;
@@ -889,7 +889,7 @@ form.addEventListener("submit", async (event) => {
   } else {
     const payload = { name };
     if (!source && !info) {
-      alert("Informe uma pasta, URL do SharePoint, envie um arquivo ou preencha as informações do projeto.");
+      alert("Informe uma pasta, URL do SharePoint, envie um arquivo ou preencha as informações da evolutiva.");
       return;
     }
     if (info) payload.notes = info;
@@ -906,7 +906,7 @@ form.addEventListener("submit", async (event) => {
   }
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
-    alert(body.error || "Nao foi possivel cadastrar o projeto.");
+    alert(body.error || "Nao foi possivel cadastrar a evolutiva.");
     return;
   }
 
@@ -929,7 +929,7 @@ studyForm.addEventListener("submit", async (event) => {
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
-    alert(body.error || "Nao foi possivel cadastrar o projeto em estudo.");
+    alert(body.error || "Nao foi possivel cadastrar a evolutiva em estudo.");
     return;
   }
   studyForm.reset();
