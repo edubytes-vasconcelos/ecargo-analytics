@@ -1543,6 +1543,7 @@ class Handler(BaseHTTPRequestHandler):
                     project["uploadedSchedule"] = _save_project_upload(file_item)
                     project.pop("folderPath", None)
                     project.pop("sharepointUrl", None)
+                    project.pop("type", None)
                     project["updatedAt"] = datetime.now().isoformat(timespec="seconds")
                     updated = project
                     break

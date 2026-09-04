@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Portal E-Cargo | Projetos</title>
-    <link rel="stylesheet" href="__BASE_PATH__/projects/styles.css?v=6" />
+    <link rel="stylesheet" href="__BASE_PATH__/projects/styles.css?v=7" />
   </head>
   <body>
     <header class="topbar">
@@ -19,6 +19,7 @@
       </nav>
       <div class="top-actions">
         <button id="openHelpButton" type="button" title="Abrir manual de uso">Manual</button>
+        <button id="exportDashboardButton" type="button" title="Exportar dashboard em PDF">Exportar PDF</button>
         <button id="refreshButton" type="button" title="Atualizar cronogramas">Atualizar cronogramas</button>
         <button id="openSettingsButton" class="icon-button" type="button" title="Configurações" aria-label="Configurações">
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -213,7 +214,8 @@
               <li>Use o ícone de lápis ao lado do título para renomear projetos já cadastrados.</li>
               <li>Abra um projeto para ver tarefas, planejado, realizado, desvio, atrasos e pontos de atenção.</li>
               <li>Use os filtros de tarefas para focar em Atenção, Atrasadas ou Em andamento.</li>
-              <li>Atualizar cronograma substitui o arquivo usado nas métricas do projeto.</li>
+              <li>Atualizar cronograma substitui o arquivo usado nas métricas do projeto; em projetos Em construção, essa ação transforma o cadastro em projeto acompanhado.</li>
+              <li>Use Exportar PDF para gerar uma versão do dashboard pronta para distribuição.</li>
               <li>No Dashboard, arraste os cards para organizar a ordem dentro de Projetos ou Estudos.</li>
             </ol>
           </section>
@@ -299,6 +301,6 @@
       </div>
     </div>
 
-    <script src="__BASE_PATH__/projects/app.js?v=17"></script>
+    <script src="__BASE_PATH__/projects/app.js?v=18"></script>
   </body>
 </html>

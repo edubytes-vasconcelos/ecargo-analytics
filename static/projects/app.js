@@ -16,6 +16,7 @@ const hideProjectFormButton = document.querySelector("#hideProjectFormButton");
 const showStudyFormButton = document.querySelector("#showStudyFormButton");
 const hideStudyFormButton = document.querySelector("#hideStudyFormButton");
 const refreshButton = document.querySelector("#refreshButton");
+const exportDashboardButton = document.querySelector("#exportDashboardButton");
 const lastUpdate = document.querySelector("#lastUpdate");
 const dashboardTitle = document.querySelector("#dashboard-title");
 const reportModal = document.querySelector("#reportModal");
@@ -454,11 +455,13 @@ function createConstructionCard(project) {
     </div>
     <div class="note-preview">${escapeHtml(project.notes || "Projeto em construção aguardando cronograma ou definição complementar.")}</div>
     <div class="summary-actions construction-actions">
+      <button type="button" data-action="update">Atualizar cronograma</button>
       <button type="button" data-action="notes">Informações</button>
       <button type="button" data-action="delete">Excluir</button>
     </div>
   `;
   card.querySelector("[data-action='edit']").addEventListener("click", () => openStudyEditor(project));
+  card.querySelector("[data-action='update']").addEventListener("click", () => chooseScheduleUpdate(project.id));
   card.querySelector("[data-action='notes']").addEventListener("click", () => openNotes(project));
   card.querySelector("[data-action='delete']").addEventListener("click", () => deleteProject(project.id));
   return card;
@@ -660,6 +663,16 @@ function showDashboard() {
   renderCurrentView();
 }
 
+function exportDashboardPdf() {
+  if (selectedProjectId) {
+    showDashboard();
+  }
+  document.body.classList.add("print-dashboard");
+  requestAnimationFrame(() => {
+    window.print();
+  });
+}
+
 async function loadProjects() {
   refreshButton.disabled = true;
   try {
@@ -855,6 +868,10 @@ closeHelpButton.addEventListener("click", () => {
 });
 
 refreshButton.addEventListener("click", loadProjects);
+exportDashboardButton.addEventListener("click", exportDashboardPdf);
+window.addEventListener("afterprint", () => {
+  document.body.classList.remove("print-dashboard");
+});
 closeReportButton.addEventListener("click", () => {
   reportModal.hidden = true;
 });
