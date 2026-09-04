@@ -17,6 +17,7 @@ const showStudyFormButton = document.querySelector("#showStudyFormButton");
 const hideStudyFormButton = document.querySelector("#hideStudyFormButton");
 const refreshButton = document.querySelector("#refreshButton");
 const exportDashboardButton = document.querySelector("#exportDashboardButton");
+const executiveReport = document.querySelector("#executiveReport");
 const lastUpdate = document.querySelector("#lastUpdate");
 const dashboardTitle = document.querySelector("#dashboard-title");
 const reportModal = document.querySelector("#reportModal");
@@ -663,11 +664,135 @@ function showDashboard() {
   renderCurrentView();
 }
 
+function projectExecutiveStatus(project) {
+  if (isStudyProject(project)) return { label: "Em estudo", className: "study" };
+  if (isConstructionProject(project)) return { label: "Em construção", className: "construction" };
+  const { dashboard, variance } = getDashboardNumbers(project);
+  const label = dashboard.status === "parsed" ? projectRiskLabel(dashboard, variance) : "Falha de leitura";
+  const className = label === "Atrasado" ? "late" : label === "Atenção" ? "risk" : dashboard.status === "parsed" ? "ok" : "error";
+  return { label, className };
+}
+
+function executiveRecommendation(project) {
+  if (isStudyProject(project)) return "Definir escopo, prioridade e próximo marco de decisão.";
+  if (isConstructionProject(project)) return "Vincular cronograma para iniciar acompanhamento de prazo e avanço.";
+
+  const { dashboard, variance } = getDashboardNumbers(project);
+  if (dashboard.status !== "parsed") return dashboard.message || "Revisar origem do cronograma.";
+  if ((dashboard.lateTasks ?? 0) > 0) return "Revisar plano de recuperação das atividades atrasadas.";
+  if ((dashboard.attentionTasks ?? 0) > 0 || variance < 0) return "Monitorar desvios e confirmar responsáveis pelos próximos marcos.";
+  return "Manter acompanhamento do plano atual.";
+}
+
+function executiveReportRows(projects) {
+  return projects.map((project) => {
+    const { dashboard, realized, planned, variance, selectedFile } = getDashboardNumbers(project);
+    const status = projectExecutiveStatus(project);
+    const notes = isStudyProject(project) ? project.description : project.notes;
+    return `
+      <tr>
+        <td><strong>${escapeHtml(project.name)}</strong><small>${escapeHtml(selectedFile?.name || projectSource(project) || "Sem cronograma vinculado")}</small></td>
+        <td><span class="report-status ${status.className}">${status.label}</span></td>
+        <td>${isStudyProject(project) || isConstructionProject(project) ? "-" : `${planned}%`}</td>
+        <td>${isStudyProject(project) || isConstructionProject(project) ? "-" : `${realized}%`}</td>
+        <td>${isStudyProject(project) || isConstructionProject(project) ? "-" : `${variance > 0 ? "+" : ""}${variance} p.p.`}</td>
+        <td>${dashboard.lateTasks ?? 0}</td>
+        <td>${dashboard.attentionTasks ?? 0}</td>
+        <td>${escapeHtml(executiveRecommendation(project))}${notes ? `<small>${escapeHtml(notes)}</small>` : ""}</td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function buildExecutiveReport() {
+  const ordered = orderedDashboardProjects(projectsCache);
+  const projects = ordered.projects;
+  const studies = ordered.studies;
+  const parsedProjects = projects.filter((project) => project.dashboard?.status === "parsed");
+  const lateProjects = parsedProjects.filter((project) => (project.dashboard?.lateTasks ?? 0) > 0);
+  const riskProjects = parsedProjects.filter((project) => {
+    const { dashboard, variance } = getDashboardNumbers(project);
+    return (dashboard.attentionTasks ?? 0) > 0 || variance < 0;
+  });
+  const constructionProjects = projects.filter(isConstructionProject);
+  const okProjects = parsedProjects.filter((project) => projectExecutiveStatus(project).className === "ok");
+  const avg = (items, picker) => items.length ? Math.round(items.reduce((sum, item) => sum + picker(item), 0) / items.length) : 0;
+  const averagePlanned = avg(parsedProjects, (project) => getDashboardNumbers(project).planned);
+  const averageRealized = avg(parsedProjects, (project) => getDashboardNumbers(project).realized);
+  const averageVariance = averageRealized - averagePlanned;
+  const generatedAt = formatDate(new Date().toISOString(), true);
+
+  executiveReport.innerHTML = `
+    <header class="report-cover">
+      <span>Portal E-Cargo</span>
+      <h1>Relatório executivo de projetos</h1>
+      <p>Visão consolidada para acompanhamento gerencial. Gerado em ${generatedAt}.</p>
+    </header>
+
+    <section class="report-section">
+      <h2>Resumo da carteira</h2>
+      <div class="report-kpis">
+        <div><span>Projetos acompanhados</span><strong>${projects.length}</strong></div>
+        <div><span>Em dia</span><strong>${okProjects.length}</strong></div>
+        <div><span>Atrasados</span><strong>${lateProjects.length}</strong></div>
+        <div><span>Em atenção</span><strong>${riskProjects.length}</strong></div>
+        <div><span>Em construção</span><strong>${constructionProjects.length}</strong></div>
+        <div><span>Em estudo</span><strong>${studies.length}</strong></div>
+      </div>
+      <div class="report-narrative">
+        <p>Avanço médio planejado de ${averagePlanned}% contra ${averageRealized}% realizado, com desvio consolidado de ${averageVariance > 0 ? "+" : ""}${averageVariance} p.p.</p>
+        <p>${lateProjects.length || riskProjects.length ? "A carteira possui pontos que exigem acompanhamento ativo de prazo e responsáveis." : "A carteira acompanhada não apresenta atrasos ou desvios críticos no momento."}</p>
+      </div>
+    </section>
+
+    <section class="report-section">
+      <h2>Projetos</h2>
+      ${projects.length ? `<table class="report-table">
+        <thead>
+          <tr>
+            <th>Projeto</th>
+            <th>Status</th>
+            <th>Plan.</th>
+            <th>Real.</th>
+            <th>Desvio</th>
+            <th>Atrasos</th>
+            <th>Atenção</th>
+            <th>Direcionamento executivo</th>
+          </tr>
+        </thead>
+        <tbody>${executiveReportRows(projects)}</tbody>
+      </table>` : `<p class="report-empty">Nenhum projeto cadastrado.</p>`}
+    </section>
+
+    <section class="report-section">
+      <h2>Estudos</h2>
+      ${studies.length ? `<table class="report-table studies-table">
+        <thead>
+          <tr>
+            <th>Estudo</th>
+            <th>Status</th>
+            <th>Direcionamento executivo</th>
+          </tr>
+        </thead>
+        <tbody>${studies.map((project) => `
+          <tr>
+            <td><strong>${escapeHtml(project.name)}</strong></td>
+            <td><span class="report-status study">Em estudo</span></td>
+            <td>${escapeHtml(project.description || executiveRecommendation(project))}</td>
+          </tr>
+        `).join("")}</tbody>
+      </table>` : `<p class="report-empty">Nenhum estudo cadastrado.</p>`}
+    </section>
+  `;
+}
+
 function exportDashboardPdf() {
   if (selectedProjectId) {
     showDashboard();
   }
-  document.body.classList.add("print-dashboard");
+  buildExecutiveReport();
+  executiveReport.setAttribute("aria-hidden", "false");
+  document.body.classList.add("print-report");
   requestAnimationFrame(() => {
     window.print();
   });
@@ -870,7 +995,8 @@ closeHelpButton.addEventListener("click", () => {
 refreshButton.addEventListener("click", loadProjects);
 exportDashboardButton.addEventListener("click", exportDashboardPdf);
 window.addEventListener("afterprint", () => {
-  document.body.classList.remove("print-dashboard");
+  document.body.classList.remove("print-report");
+  executiveReport.setAttribute("aria-hidden", "true");
 });
 closeReportButton.addEventListener("click", () => {
   reportModal.hidden = true;
