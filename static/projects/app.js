@@ -56,8 +56,11 @@ let editingProject = null;
 let scheduleUpdateProjectId = null;
 let selectedProjectId = localStorage.getItem("selectedProjectId") || null;
 let draggedDashboardCard = null;
+let draggedDashboardSection = null;
 const dashboardOrderKey = "ecargo.projects.dashboardOrder";
 const dashboardCollapsedKey = "ecargo.projects.dashboardCollapsed";
+const dashboardGroupOrderKey = "ecargo.projects.dashboardGroupOrder";
+const defaultDashboardGroupOrder = ["work-plan", "projects", "studies"];
 
 function formatDate(value, withTime = false) {
   if (!value) return "Nao informado";
@@ -390,7 +393,11 @@ function renderDashboard(projects) {
   projectsEl.innerHTML = "";
 
   const ordered = orderedDashboardProjects(projects);
-  renderWorkPlanSection();
+  const sections = [renderWorkPlanSection(), renderDashboardSection("Evolutivas", ordered.projects, "projects"), renderDashboardSection("Estudos", ordered.studies, "studies")].filter(Boolean);
+  for (const section of orderedDashboardSections(sections)) {
+    projectsEl.appendChild(section);
+  }
+  enableDashboardSectionSorting();
   if (!projects.length) {
     const hint = document.createElement("p");
     hint.className = "hint";
@@ -398,8 +405,6 @@ function renderDashboard(projects) {
     projectsEl.appendChild(hint);
     return;
   }
-  renderDashboardSection("Evolutivas", ordered.projects, "projects");
-  renderDashboardSection("Estudos", ordered.studies, "studies");
 }
 
 function renderWorkPlanSection() {
@@ -408,6 +413,7 @@ function renderWorkPlanSection() {
   const section = document.createElement("section");
   section.className = "dashboard-section work-plan-section";
   section.dataset.dashboardGroup = "work-plan";
+  section.draggable = true;
   section.classList.toggle("is-collapsed", collapsed);
   section.innerHTML = `
     <div class="dashboard-section-head">
@@ -441,16 +447,17 @@ function renderWorkPlanSection() {
     });
   }
   section.querySelector(".section-toggle").addEventListener("click", () => toggleDashboardSection(section, "work-plan"));
-  projectsEl.appendChild(section);
+  return section;
 }
 
 function renderDashboardSection(title, items, group) {
-  if (!items.length) return;
+  if (!items.length) return null;
 
   const collapsed = isDashboardSectionCollapsed(group);
   const section = document.createElement("section");
   section.className = "dashboard-section";
   section.dataset.dashboardGroup = group;
+  section.draggable = true;
   section.classList.toggle("is-collapsed", collapsed);
   section.innerHTML = `
     <div class="dashboard-section-head">
@@ -470,7 +477,7 @@ function renderDashboardSection(title, items, group) {
 
   enableDashboardSorting(grid);
   section.querySelector(".section-toggle").addEventListener("click", () => toggleDashboardSection(section, group));
-  projectsEl.appendChild(section);
+  return section;
 }
 
 function toggleDashboardSection(section, group) {
@@ -502,6 +509,76 @@ function saveDashboardSectionState(group, collapsed) {
   const state = readDashboardSectionState();
   state[group] = collapsed;
   localStorage.setItem(dashboardCollapsedKey, JSON.stringify(state));
+}
+
+function orderedDashboardSections(sections) {
+  const savedOrder = readDashboardGroupOrder();
+  const fallback = new Map(defaultDashboardGroupOrder.map((group, index) => [group, index + 100]));
+  const position = new Map(savedOrder.map((group, index) => [group, index]));
+  return [...sections].sort((a, b) => {
+    const left = a.dataset.dashboardGroup;
+    const right = b.dataset.dashboardGroup;
+    const leftPosition = position.has(left) ? position.get(left) : fallback.get(left) ?? Number.MAX_SAFE_INTEGER;
+    const rightPosition = position.has(right) ? position.get(right) : fallback.get(right) ?? Number.MAX_SAFE_INTEGER;
+    return leftPosition - rightPosition;
+  });
+}
+
+function readDashboardGroupOrder() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(dashboardGroupOrderKey) || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveDashboardGroupOrder() {
+  const groups = [...projectsEl.querySelectorAll(".dashboard-section")]
+    .map((section) => section.dataset.dashboardGroup)
+    .filter(Boolean);
+  localStorage.setItem(dashboardGroupOrderKey, JSON.stringify(groups));
+}
+
+function enableDashboardSectionSorting() {
+  if (projectsEl.dataset.sectionSorting === "ready") return;
+  projectsEl.dataset.sectionSorting = "ready";
+  projectsEl.addEventListener("dragstart", onDashboardSectionDragStart);
+  projectsEl.addEventListener("dragover", onDashboardSectionDragOver);
+  projectsEl.addEventListener("dragend", onDashboardSectionDragEnd);
+}
+
+function onDashboardSectionDragStart(event) {
+  if (event.target.closest(".summary-card")) return;
+  const section = event.target.closest(".dashboard-section");
+  if (!section || section.parentElement !== projectsEl) return;
+  draggedDashboardSection = section;
+  event.dataTransfer.effectAllowed = "move";
+  event.dataTransfer.setData("text/plain", section.dataset.dashboardGroup || "");
+  requestAnimationFrame(() => section.classList.add("dragging-section"));
+}
+
+function onDashboardSectionDragOver(event) {
+  if (!draggedDashboardSection) return;
+  event.preventDefault();
+  const target = dragTargetSection(event.clientY);
+  if (target) projectsEl.insertBefore(draggedDashboardSection, target);
+  else projectsEl.appendChild(draggedDashboardSection);
+}
+
+function onDashboardSectionDragEnd() {
+  if (!draggedDashboardSection) return;
+  draggedDashboardSection.classList.remove("dragging-section");
+  saveDashboardGroupOrder();
+  draggedDashboardSection = null;
+}
+
+function dragTargetSection(y) {
+  const sections = [...projectsEl.querySelectorAll(".dashboard-section:not(.dragging-section)")];
+  return sections.find((section) => {
+    const box = section.getBoundingClientRect();
+    return y < box.top + box.height / 2;
+  }) || null;
 }
 
 function createStudyCard(project) {

@@ -362,6 +362,20 @@ textarea {
   gap: 10px;
 }
 
+.dashboard-section[draggable="true"] {
+  cursor: grab;
+}
+
+.dashboard-section[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.dashboard-section.dragging-section {
+  opacity: 0.64;
+  outline: 2px dashed rgba(15, 111, 124, 0.36);
+  outline-offset: 5px;
+}
+
 .dashboard-section-head {
   display: flex;
   align-items: center;
