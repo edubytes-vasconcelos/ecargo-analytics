@@ -38,6 +38,8 @@ const closeStudyEditButton = document.querySelector("#closeStudyEditButton");
 const attentionDelayInput = document.querySelector("#attentionDelayInput");
 const negativeVarianceInput = document.querySelector("#negativeVarianceInput");
 const criteriaDescription = document.querySelector("#criteriaDescription");
+const workPlanImageInput = document.querySelector("#workPlanImageInput");
+const workPlanUploadStatus = document.querySelector("#workPlanUploadStatus");
 const projectUiState = new Map();
 const appBasePath = document.documentElement.dataset.basePath || "";
 const scheduleUpdateInput = document.createElement("input");
@@ -55,6 +57,7 @@ let scheduleUpdateProjectId = null;
 let selectedProjectId = localStorage.getItem("selectedProjectId") || null;
 let draggedDashboardCard = null;
 const dashboardOrderKey = "ecargo.projects.dashboardOrder";
+const dashboardCollapsedKey = "ecargo.projects.dashboardCollapsed";
 
 function formatDate(value, withTime = false) {
   if (!value) return "Nao informado";
@@ -386,27 +389,78 @@ function renderDashboard(projects) {
   projectsEl.className = "dashboard-sections";
   projectsEl.innerHTML = "";
 
+  const ordered = orderedDashboardProjects(projects);
+  renderWorkPlanSection();
   if (!projects.length) {
-    projectsEl.innerHTML = "<p class=\"hint\">Nenhuma evolutiva cadastrada.</p>";
+    const hint = document.createElement("p");
+    hint.className = "hint";
+    hint.textContent = "Nenhuma evolutiva cadastrada.";
+    projectsEl.appendChild(hint);
     return;
   }
-
-  const ordered = orderedDashboardProjects(projects);
   renderDashboardSection("Evolutivas", ordered.projects, "projects");
   renderDashboardSection("Estudos", ordered.studies, "studies");
+}
+
+function renderWorkPlanSection() {
+  const image = projectSettings.workPlanImage || null;
+  const collapsed = isDashboardSectionCollapsed("work-plan");
+  const section = document.createElement("section");
+  section.className = "dashboard-section work-plan-section";
+  section.dataset.dashboardGroup = "work-plan";
+  section.classList.toggle("is-collapsed", collapsed);
+  section.innerHTML = `
+    <div class="dashboard-section-head">
+      <div>
+        <h3>Plano de trabalho</h3>
+        <span>${image ? escapeHtml(image.name || "Imagem enviada") : "Imagem enviada pela engrenagem"}</span>
+      </div>
+      <button class="section-toggle" type="button" aria-expanded="${collapsed ? "false" : "true"}">${collapsed ? "Expandir" : "Recolher"}</button>
+    </div>
+    <div class="work-plan-body" ${collapsed ? "hidden" : ""}></div>
+  `;
+
+  const body = section.querySelector(".work-plan-body");
+  const imageVersion = image?.id ? `?v=${encodeURIComponent(image.id)}` : "";
+  const imageUrl = `${appBasePath}/api/project-plan-image${imageVersion}`;
+  if (image) {
+    body.innerHTML = `
+      <a class="work-plan-preview" href="${escapeHtml(imageUrl)}" target="_blank" rel="noreferrer">
+        <img src="${escapeHtml(imageUrl)}" alt="Plano de trabalho" />
+      </a>
+    `;
+  } else {
+    body.innerHTML = `
+      <div class="work-plan-empty">
+        <p>Nenhuma imagem de plano de trabalho enviada.</p>
+        <button type="button" data-action="open-settings">Enviar pela engrenagem</button>
+      </div>
+    `;
+    body.querySelector("[data-action='open-settings']").addEventListener("click", () => {
+      settingsModal.hidden = false;
+    });
+  }
+  section.querySelector(".section-toggle").addEventListener("click", () => toggleDashboardSection(section, "work-plan"));
+  projectsEl.appendChild(section);
 }
 
 function renderDashboardSection(title, items, group) {
   if (!items.length) return;
 
+  const collapsed = isDashboardSectionCollapsed(group);
   const section = document.createElement("section");
   section.className = "dashboard-section";
+  section.dataset.dashboardGroup = group;
+  section.classList.toggle("is-collapsed", collapsed);
   section.innerHTML = `
     <div class="dashboard-section-head">
-      <h3>${title}</h3>
-      <span>Ordem manual</span>
+      <div>
+        <h3>${title}</h3>
+        <span>${items.length} ${items.length === 1 ? "item" : "itens"} - ordem manual</span>
+      </div>
+      <button class="section-toggle" type="button" aria-expanded="${collapsed ? "false" : "true"}">${collapsed ? "Expandir" : "Recolher"}</button>
     </div>
-    <div class="dashboard-grid sortable-grid" data-order-group="${group}"></div>
+    <div class="dashboard-grid sortable-grid" data-order-group="${group}" ${collapsed ? "hidden" : ""}></div>
   `;
   const grid = section.querySelector(".dashboard-grid");
 
@@ -415,7 +469,39 @@ function renderDashboardSection(title, items, group) {
   }
 
   enableDashboardSorting(grid);
+  section.querySelector(".section-toggle").addEventListener("click", () => toggleDashboardSection(section, group));
   projectsEl.appendChild(section);
+}
+
+function toggleDashboardSection(section, group) {
+  const collapsed = !section.classList.contains("is-collapsed");
+  section.classList.toggle("is-collapsed", collapsed);
+  const content = section.querySelector(".dashboard-grid, .work-plan-body");
+  if (content) content.hidden = collapsed;
+  const button = section.querySelector(".section-toggle");
+  if (button) {
+    button.textContent = collapsed ? "Expandir" : "Recolher";
+    button.setAttribute("aria-expanded", collapsed ? "false" : "true");
+  }
+  saveDashboardSectionState(group, collapsed);
+}
+
+function readDashboardSectionState() {
+  try {
+    return JSON.parse(localStorage.getItem(dashboardCollapsedKey) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function isDashboardSectionCollapsed(group) {
+  return readDashboardSectionState()[group] === true;
+}
+
+function saveDashboardSectionState(group, collapsed) {
+  const state = readDashboardSectionState();
+  state[group] = collapsed;
+  localStorage.setItem(dashboardCollapsedKey, JSON.stringify(state));
 }
 
 function createStudyCard(project) {
@@ -862,7 +948,44 @@ async function loadSettings() {
     projectSettings = await response.json();
   } finally {
     updateCriteriaText();
+    updateWorkPlanUploadStatus();
   }
+}
+
+async function uploadWorkPlanImage(file) {
+  if (!file) return;
+  if (!/\.(png|jpe?g|webp)$/i.test(file.name)) {
+    alert("Envie uma imagem .png, .jpg, .jpeg ou .webp.");
+    return;
+  }
+
+  workPlanImageInput.disabled = true;
+  workPlanUploadStatus.textContent = `Enviando ${file.name}...`;
+  try {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await fetch(`${appBasePath}/api/project-settings/plan-image`, {
+      method: "POST",
+      body: formData,
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      alert(body.error || "Nao foi possivel enviar a imagem.");
+      return;
+    }
+    projectSettings = body;
+    updateWorkPlanUploadStatus();
+    renderCurrentView();
+  } finally {
+    workPlanImageInput.disabled = false;
+    workPlanImageInput.value = "";
+  }
+}
+
+function updateWorkPlanUploadStatus() {
+  const image = projectSettings.workPlanImage;
+  if (!workPlanUploadStatus) return;
+  workPlanUploadStatus.textContent = image?.name ? `Imagem atual: ${image.name}` : "Nenhuma imagem enviada.";
 }
 
 form.addEventListener("submit", async (event) => {
@@ -987,6 +1110,9 @@ openHelpButton.addEventListener("click", () => {
 });
 closeHelpButton.addEventListener("click", () => {
   helpModal.hidden = true;
+});
+workPlanImageInput.addEventListener("change", async () => {
+  await uploadWorkPlanImage(workPlanImageInput.files[0]);
 });
 
 refreshButton.addEventListener("click", loadProjects);
