@@ -40,6 +40,7 @@ const negativeVarianceInput = document.querySelector("#negativeVarianceInput");
 const criteriaDescription = document.querySelector("#criteriaDescription");
 const workPlanImageInput = document.querySelector("#workPlanImageInput");
 const workPlanUploadStatus = document.querySelector("#workPlanUploadStatus");
+const deleteWorkPlanImageButton = document.querySelector("#deleteWorkPlanImageButton");
 const projectUiState = new Map();
 const appBasePath = document.documentElement.dataset.basePath || "";
 const scheduleUpdateInput = document.createElement("input");
@@ -1059,10 +1060,35 @@ async function uploadWorkPlanImage(file) {
   }
 }
 
+async function deleteWorkPlanImage() {
+  if (!projectSettings.workPlanImage) return;
+  if (!window.confirm("Excluir a imagem atual do plano de trabalho?")) return;
+
+  deleteWorkPlanImageButton.disabled = true;
+  try {
+    const response = await fetch(`${appBasePath}/api/project-settings/plan-image`, {
+      method: "DELETE",
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      alert(body.error || "Nao foi possivel excluir a imagem.");
+      return;
+    }
+    projectSettings = body;
+    updateWorkPlanUploadStatus();
+    renderCurrentView();
+  } finally {
+    deleteWorkPlanImageButton.disabled = false;
+  }
+}
+
 function updateWorkPlanUploadStatus() {
   const image = projectSettings.workPlanImage;
   if (!workPlanUploadStatus) return;
   workPlanUploadStatus.textContent = image?.name ? `Imagem atual: ${image.name}` : "Nenhuma imagem enviada.";
+  if (deleteWorkPlanImageButton) {
+    deleteWorkPlanImageButton.disabled = !image;
+  }
 }
 
 form.addEventListener("submit", async (event) => {
@@ -1191,6 +1217,7 @@ closeHelpButton.addEventListener("click", () => {
 workPlanImageInput.addEventListener("change", async () => {
   await uploadWorkPlanImage(workPlanImageInput.files[0]);
 });
+deleteWorkPlanImageButton.addEventListener("click", deleteWorkPlanImage);
 
 refreshButton.addEventListener("click", loadProjects);
 exportDashboardButton.addEventListener("click", exportDashboardPdf);

@@ -857,6 +857,16 @@ def _save_project_plan_image(file_item) -> dict:
     }
 
 
+def _delete_project_plan_image() -> dict:
+    settings = read_project_settings()
+    image = settings.get("workPlanImage") or {}
+    image_path = Path(str(image.get("path", ""))).resolve()
+    uploads_root = PROJECT_PLAN_UPLOADS.resolve()
+    if image_path.exists() and image_path.is_file() and uploads_root in image_path.parents:
+        image_path.unlink()
+    return write_project_settings({"workPlanImage": None})
+
+
 def _project_text(node: ET.Element | None, name: str) -> str:
     if node is None:
         return ""
@@ -1782,6 +1792,12 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_DELETE(self) -> None:
         path = self._route_path()
+        if path == "/api/project-settings/plan-image":
+            try:
+                self._send_json(_delete_project_plan_image())
+            except Exception as exc:
+                self._send_json({"error": str(exc)}, 400)
+            return
         if not path.startswith("/api/projects/"):
             self.send_error(404)
             return

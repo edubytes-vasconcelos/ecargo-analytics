@@ -402,6 +402,18 @@ textarea {
   color: var(--brand-dark);
 }
 
+.secondary-action {
+  border-color: var(--line);
+  background: var(--panel);
+  color: var(--brand-dark);
+}
+
+.secondary-action:hover:not(:disabled) {
+  border-color: var(--red);
+  background: #feecec;
+  color: var(--red);
+}
+
 .dashboard-section.is-collapsed .dashboard-section-head {
   padding-bottom: 10px;
   border-bottom: 1px solid var(--line);
