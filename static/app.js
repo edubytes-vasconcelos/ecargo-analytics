@@ -211,6 +211,7 @@ function savedActiveView() {
 function buildFilters() {
   buildCheckList("categoryList", options.categorias || []);
   buildCheckList("subcategoryList", options.subcategorias || []);
+  buildCheckList("serviceTypeList", options.tipos_registro || []);
   buildCheckList("yearList", options.anos || []);
   buildCheckList(
     "monthList",
@@ -258,6 +259,7 @@ function normalizeFilterText(value) {
 function filteredRecords() {
   const cats = selected("categoryList");
   const subs = selected("subcategoryList");
+  const serviceTypes = selected("serviceTypeList");
   const years = selected("yearList");
   const months = selected("monthList");
   const catMode = document.getElementById("categoryMode").value;
@@ -265,12 +267,14 @@ function filteredRecords() {
   return records.filter((row) => {
     const category = String(row["Categoria de terceiro nível"] || "");
     const subcategory = String(row.Subcategoria || "");
+    const serviceType = String(row["Tipo de Registro de Serviço"] || "");
     const year = String(row["Ano solicitação"] || "");
     const month = String(row["Mês número"] || "");
 
     if (cats.size && catMode === "include" && !cats.has(category)) return false;
     if (cats.size && catMode === "exclude" && cats.has(category)) return false;
     if (subs.size && !subs.has(subcategory)) return false;
+    if (serviceTypes.size && !serviceTypes.has(serviceType)) return false;
     if (years.size && !years.has(year)) return false;
     if (months.size && !months.has(month)) return false;
     return true;

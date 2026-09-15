@@ -277,7 +277,7 @@ h2 {
 
 .filter-grid {
   display: grid;
-  grid-template-columns: 1.5fr 1fr 0.55fr 0.75fr;
+  grid-template-columns: minmax(240px, 1.4fr) minmax(190px, 1fr) minmax(190px, 1fr) minmax(110px, 0.55fr) minmax(130px, 0.65fr);
   gap: 12px;
 }
 

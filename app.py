@@ -193,6 +193,7 @@ def _options(records: list[dict]) -> dict:
     return {
         "categorias": uniq("Categoria de terceiro nível"),
         "subcategorias": uniq("Subcategoria"),
+        "tipos_registro": uniq("Tipo de Registro de Serviço"),
         "anos": uniq("Ano solicitação"),
         "meses": [
             {"numero": n, "nome": name}
