@@ -693,7 +693,7 @@ dt {
 }
 
 .markdown-content > * + * {
-  margin-top: 8px;
+  margin-top: 1em;
 }
 
 .markdown-content p,
