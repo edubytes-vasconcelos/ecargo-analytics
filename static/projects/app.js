@@ -59,8 +59,6 @@ let selectedProjectId = localStorage.getItem("selectedProjectId") || null;
 let draggedDashboardCard = null;
 let draggedDashboardSection = null;
 let percentageAlignmentFrame = null;
-let cardExpansionFrame = null;
-let dashboardCardSequence = 0;
 const dashboardOrderKey = "ecargo.projects.dashboardOrder";
 const dashboardCollapsedKey = "ecargo.projects.dashboardCollapsed";
 const dashboardGroupOrderKey = "ecargo.projects.dashboardGroupOrder";
@@ -562,7 +560,6 @@ function renderDashboard(projects) {
   dashboardTitle.textContent = "Dashboard";
   projectsEl.className = "dashboard-sections";
   projectsEl.innerHTML = "";
-  dashboardCardSequence = 0;
 
   const ordered = orderedDashboardProjects(projects);
   const sections = [renderWorkPlanSection(), renderDashboardSection("Evolutivas", ordered.projects, "projects"), renderDashboardSection("Estudos", ordered.studies, "studies")].filter(Boolean);
@@ -571,7 +568,6 @@ function renderDashboard(projects) {
   }
   enableDashboardSectionSorting();
   schedulePercentageAlignment();
-  scheduleCardExpansionMeasurement();
   if (!projects.length) {
     const hint = document.createElement("p");
     hint.className = "hint";
@@ -613,55 +609,6 @@ function schedulePercentageAlignment() {
   percentageAlignmentFrame = requestAnimationFrame(() => {
     percentageAlignmentFrame = null;
     alignDashboardPercentages();
-  });
-}
-
-function cardExpandControlHtml() {
-  return `
-    <div class="card-expand-row">
-      <button class="card-expand-toggle" type="button" aria-expanded="false" hidden>Expandir</button>
-    </div>
-  `;
-}
-
-function setupCardExpansion(card, projectName) {
-  const content = card.querySelector(".note-preview");
-  const button = card.querySelector(".card-expand-toggle");
-  if (!content || !button) return;
-
-  dashboardCardSequence += 1;
-  content.id = `card-summary-content-${dashboardCardSequence}`;
-  button.setAttribute("aria-controls", content.id);
-  button.setAttribute("aria-label", `Expandir informações de ${projectName}`);
-  button.draggable = false;
-  button.addEventListener("click", (event) => {
-    event.stopPropagation();
-    const expanded = card.classList.toggle("is-expanded");
-    button.textContent = expanded ? "Recolher" : "Expandir";
-    button.setAttribute("aria-expanded", String(expanded));
-    button.setAttribute("aria-label", `${expanded ? "Recolher" : "Expandir"} informações de ${projectName}`);
-    schedulePercentageAlignment();
-    scheduleCardExpansionMeasurement();
-  });
-}
-
-function updateCardExpansionControls() {
-  projectsEl.querySelectorAll(".summary-card").forEach((card) => {
-    const content = card.querySelector(".note-preview");
-    const button = card.querySelector(".card-expand-toggle");
-    if (!button) return;
-
-    const expanded = card.classList.contains("is-expanded");
-    const overflowing = Boolean(content && content.scrollHeight > content.clientHeight + 1);
-    button.hidden = !expanded && !overflowing;
-  });
-}
-
-function scheduleCardExpansionMeasurement() {
-  if (cardExpansionFrame !== null) cancelAnimationFrame(cardExpansionFrame);
-  cardExpansionFrame = requestAnimationFrame(() => {
-    cardExpansionFrame = null;
-    updateCardExpansionControls();
   });
 }
 
@@ -853,12 +800,10 @@ function createStudyCard(project) {
       <span class="summary-status study">Em estudo</span>
     </div>
     <div class="note-preview markdown-content">${markdownBlock(project.description, "Evolutiva em estudo aguardando definição de escopo, cronograma ou priorização.")}</div>
-    ${cardExpandControlHtml()}
     <div class="summary-actions study-actions">
       <button type="button" data-action="delete">Excluir</button>
     </div>
   `;
-  setupCardExpansion(card, project.name);
   card.querySelector("[data-action='edit']").addEventListener("click", () => openStudyEditor(project));
   card.querySelector("[data-action='delete']").addEventListener("click", () => deleteProject(project.id));
   return card;
@@ -878,14 +823,12 @@ function createConstructionCard(project) {
       <span class="summary-status construction">Em construção</span>
     </div>
     <div class="note-preview markdown-content">${markdownBlock(project.notes, "Evolutiva em construção aguardando cronograma ou definição complementar.")}</div>
-    ${cardExpandControlHtml()}
     <div class="summary-actions construction-actions">
       <button type="button" data-action="update">Atualizar cronograma</button>
       <button type="button" data-action="notes">Informações</button>
       <button type="button" data-action="delete">Excluir</button>
     </div>
   `;
-  setupCardExpansion(card, project.name);
   card.querySelector("[data-action='edit']").addEventListener("click", () => openStudyEditor(project));
   card.querySelector("[data-action='update']").addEventListener("click", () => chooseScheduleUpdate(project.id));
   card.querySelector("[data-action='notes']").addEventListener("click", () => openNotes(project));
@@ -918,14 +861,12 @@ function createProjectCard(project) {
     <div class="summary-progress">
       <span style="width:${Math.max(0, Math.min(100, realized))}%"></span>
     </div>
-    ${cardExpandControlHtml()}
     <div class="summary-actions">
       <button type="button" data-action="open">Abrir evolutiva</button>
       <button type="button" data-action="update">Atualizar cronograma</button>
       <button type="button" data-action="notes">Informações</button>
     </div>
   `;
-  setupCardExpansion(card, project.name);
   card.querySelector("[data-action='open']").addEventListener("click", () => openProject(project.id));
   card.querySelector("[data-action='edit']").addEventListener("click", () => openStudyEditor(project));
   card.querySelector("[data-action='update']").addEventListener("click", () => chooseScheduleUpdate(project.id));
@@ -1485,7 +1426,6 @@ deleteWorkPlanImageButton.addEventListener("click", deleteWorkPlanImage);
 refreshButton.addEventListener("click", loadProjects);
 exportDashboardButton.addEventListener("click", exportDashboardPdf);
 window.addEventListener("resize", schedulePercentageAlignment);
-window.addEventListener("resize", scheduleCardExpansionMeasurement);
 window.addEventListener("afterprint", () => {
   document.body.classList.remove("print-report");
   executiveReport.setAttribute("aria-hidden", "true");
