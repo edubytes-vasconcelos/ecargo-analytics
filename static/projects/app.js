@@ -58,6 +58,7 @@ let scheduleUpdateProjectId = null;
 let selectedProjectId = localStorage.getItem("selectedProjectId") || null;
 let draggedDashboardCard = null;
 let draggedDashboardSection = null;
+let percentageAlignmentFrame = null;
 const dashboardOrderKey = "ecargo.projects.dashboardOrder";
 const dashboardCollapsedKey = "ecargo.projects.dashboardCollapsed";
 const dashboardGroupOrderKey = "ecargo.projects.dashboardGroupOrder";
@@ -566,6 +567,7 @@ function renderDashboard(projects) {
     projectsEl.appendChild(section);
   }
   enableDashboardSectionSorting();
+  schedulePercentageAlignment();
   if (!projects.length) {
     const hint = document.createElement("p");
     hint.className = "hint";
@@ -573,6 +575,41 @@ function renderDashboard(projects) {
     projectsEl.appendChild(hint);
     return;
   }
+}
+
+function alignDashboardPercentages() {
+  const cards = [...projectsEl.querySelectorAll(".summary-card")]
+    .filter((card) => card.querySelector(".summary-kpis"));
+  const rows = new Map();
+
+  cards.forEach((card) => {
+    const head = card.querySelector(".summary-head");
+    if (head) head.style.minHeight = "";
+  });
+
+  cards.forEach((card) => {
+    const head = card.querySelector(".summary-head");
+    if (!head) return;
+    const row = Math.round(card.getBoundingClientRect().top);
+    const current = rows.get(row) || [];
+    current.push(head);
+    rows.set(row, current);
+  });
+
+  rows.forEach((heads) => {
+    const height = Math.max(...heads.map((head) => head.getBoundingClientRect().height));
+    heads.forEach((head) => {
+      head.style.minHeight = `${height}px`;
+    });
+  });
+}
+
+function schedulePercentageAlignment() {
+  if (percentageAlignmentFrame !== null) cancelAnimationFrame(percentageAlignmentFrame);
+  percentageAlignmentFrame = requestAnimationFrame(() => {
+    percentageAlignmentFrame = null;
+    alignDashboardPercentages();
+  });
 }
 
 function renderWorkPlanSection() {
@@ -1388,6 +1425,7 @@ deleteWorkPlanImageButton.addEventListener("click", deleteWorkPlanImage);
 
 refreshButton.addEventListener("click", loadProjects);
 exportDashboardButton.addEventListener("click", exportDashboardPdf);
+window.addEventListener("resize", schedulePercentageAlignment);
 window.addEventListener("afterprint", () => {
   document.body.classList.remove("print-report");
   executiveReport.setAttribute("aria-hidden", "true");
