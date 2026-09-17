@@ -692,15 +692,15 @@ dt {
   white-space: normal;
 }
 
-.markdown-content > * + * {
-  margin-top: 1em;
-}
-
 .markdown-content p,
 .markdown-content ul,
 .markdown-content ol,
 .markdown-content blockquote {
   margin: 0;
+}
+
+.markdown-content > *:not(:first-child) {
+  margin-top: 1em;
 }
 
 .markdown-content h3,
