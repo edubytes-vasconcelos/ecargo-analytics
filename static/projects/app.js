@@ -106,6 +106,173 @@ function escapeHtml(value) {
     .replace(/'/g, "&#039;");
 }
 
+function restoreInlineTokens(value, tokens) {
+  return value.replace(/\u0000(\d+)\u0000/g, (_, index) => tokens[Number(index)] || "");
+}
+
+function renderInlineMarkdown(value) {
+  const tokens = [];
+  const token = (html) => {
+    tokens.push(html);
+    return `\u0000${tokens.length - 1}\u0000`;
+  };
+  let text = String(value ?? "");
+
+  text = text.replace(/`([^`]+)`/g, (_, code) => token(`<code>${escapeHtml(code)}</code>`));
+  text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_, label, href) => {
+    return token(`<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${renderInlineMarkdown(label)}</a>`);
+  });
+
+  text = escapeHtml(text)
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*([^*]+)\*/g, "<em>$1</em>");
+
+  return restoreInlineTokens(text, tokens);
+}
+
+function renderMarkdown(value) {
+  const lines = String(value ?? "").replace(/\r\n/g, "\n").split("\n");
+  const blocks = [];
+  let paragraph = [];
+
+  const flushParagraph = () => {
+    if (!paragraph.length) return;
+    blocks.push(`<p>${paragraph.map(renderInlineMarkdown).join("<br>")}</p>`);
+    paragraph = [];
+  };
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      flushParagraph();
+      continue;
+    }
+
+    const heading = trimmed.match(/^(#{1,3})\s+(.+)$/);
+    if (heading) {
+      flushParagraph();
+      const level = heading[1].length + 2;
+      blocks.push(`<h${level}>${renderInlineMarkdown(heading[2])}</h${level}>`);
+      continue;
+    }
+
+    if (/^>\s+/.test(trimmed)) {
+      flushParagraph();
+      const quoteLines = [];
+      while (index < lines.length && /^>\s+/.test(lines[index].trim())) {
+        quoteLines.push(lines[index].trim().replace(/^>\s+/, ""));
+        index += 1;
+      }
+      index -= 1;
+      blocks.push(`<blockquote>${quoteLines.map(renderInlineMarkdown).join("<br>")}</blockquote>`);
+      continue;
+    }
+
+    if (/^[-*+]\s+/.test(trimmed)) {
+      flushParagraph();
+      const items = [];
+      while (index < lines.length && /^[-*+]\s+/.test(lines[index].trim())) {
+        items.push(lines[index].trim().replace(/^[-*+]\s+/, ""));
+        index += 1;
+      }
+      index -= 1;
+      blocks.push(`<ul>${items.map((item) => `<li>${renderInlineMarkdown(item)}</li>`).join("")}</ul>`);
+      continue;
+    }
+
+    if (/^\d+\.\s+/.test(trimmed)) {
+      flushParagraph();
+      const items = [];
+      while (index < lines.length && /^\d+\.\s+/.test(lines[index].trim())) {
+        items.push(lines[index].trim().replace(/^\d+\.\s+/, ""));
+        index += 1;
+      }
+      index -= 1;
+      blocks.push(`<ol>${items.map((item) => `<li>${renderInlineMarkdown(item)}</li>`).join("")}</ol>`);
+      continue;
+    }
+
+    paragraph.push(trimmed);
+  }
+
+  flushParagraph();
+  return blocks.join("");
+}
+
+function markdownBlock(value, fallback = "") {
+  return renderMarkdown(String(value || fallback));
+}
+
+function applyMarkdownFormat(textarea, action) {
+  const start = textarea.selectionStart;
+  const end = textarea.selectionEnd;
+  const value = textarea.value;
+  const selected = value.slice(start, end);
+
+  const replaceSelection = (next, cursorStart = start, cursorEnd = start + next.length) => {
+    textarea.value = `${value.slice(0, start)}${next}${value.slice(end)}`;
+    textarea.focus();
+    textarea.setSelectionRange(cursorStart, cursorEnd);
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+
+  const wrap = (before, after, sample) => {
+    const content = selected || sample;
+    replaceSelection(`${before}${content}${after}`, start + before.length, start + before.length + content.length);
+  };
+
+  const prefixLines = (prefix) => {
+    const target = selected || "";
+    const lines = target ? target.split("\n") : [""];
+    const next = lines.map((line) => line.startsWith(prefix) ? line : `${prefix}${line}`).join("\n");
+    replaceSelection(next, start, start + next.length);
+  };
+
+  if (action === "bold") wrap("**", "**", "texto");
+  if (action === "italic") wrap("*", "*", "texto");
+  if (action === "code") wrap("`", "`", "codigo");
+  if (action === "heading") prefixLines("### ");
+  if (action === "list") prefixLines("- ");
+  if (action === "link") {
+    const href = window.prompt("URL do link");
+    if (!href) return;
+    const label = selected || "link";
+    replaceSelection(`[${label}](${href})`, start + 1, start + 1 + label.length);
+  }
+}
+
+function setupMarkdownEditors() {
+  const tools = [
+    ["bold", "B", "Negrito"],
+    ["italic", "I", "Itálico"],
+    ["heading", "#", "Título"],
+    ["list", "-", "Lista"],
+    ["link", "Link", "Link"],
+    ["code", "</>", "Código"],
+  ];
+
+  document.querySelectorAll("textarea[data-markdown='true']").forEach((textarea) => {
+    if (textarea.dataset.markdownReady === "true") return;
+    textarea.dataset.markdownReady = "true";
+    const toolbar = document.createElement("div");
+    toolbar.className = "markdown-toolbar";
+    toolbar.setAttribute("aria-label", "Ferramentas de formatação Markdown");
+    tools.forEach(([action, label, title]) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.dataset.markdownAction = action;
+      button.textContent = label;
+      button.title = title;
+      button.setAttribute("aria-label", title);
+      button.addEventListener("click", () => applyMarkdownFormat(textarea, action));
+      toolbar.appendChild(button);
+    });
+    textarea.insertAdjacentElement("beforebegin", toolbar);
+  });
+}
+
 function statusClass(status) {
   if (status === "parsed") return "";
   if (status === "unsupported" || status === "missing") return "warn";
@@ -595,7 +762,7 @@ function createStudyCard(project) {
       </div>
       <span class="summary-status study">Em estudo</span>
     </div>
-    <div class="note-preview">${escapeHtml(project.description || "Evolutiva em estudo aguardando definição de escopo, cronograma ou priorização.")}</div>
+    <div class="note-preview markdown-content">${markdownBlock(project.description, "Evolutiva em estudo aguardando definição de escopo, cronograma ou priorização.")}</div>
     <div class="summary-actions study-actions">
       <button type="button" data-action="delete">Excluir</button>
     </div>
@@ -618,7 +785,7 @@ function createConstructionCard(project) {
       </div>
       <span class="summary-status construction">Em construção</span>
     </div>
-    <div class="note-preview">${escapeHtml(project.notes || "Evolutiva em construção aguardando cronograma ou definição complementar.")}</div>
+    <div class="note-preview markdown-content">${markdownBlock(project.notes, "Evolutiva em construção aguardando cronograma ou definição complementar.")}</div>
     <div class="summary-actions construction-actions">
       <button type="button" data-action="update">Atualizar cronograma</button>
       <button type="button" data-action="notes">Informações</button>
@@ -653,7 +820,7 @@ function createProjectCard(project) {
       <div><span>Realizado</span><strong>${realized}%</strong></div>
       <div><span>Desvio</span><strong>${variance > 0 ? "+" : ""}${variance} p.p.</strong></div>
     </div>
-    ${notes ? `<div class="note-preview">${escapeHtml(notes)}</div>` : ""}
+    ${notes ? `<div class="note-preview markdown-content">${markdownBlock(notes)}</div>` : ""}
     <div class="summary-progress">
       <span style="width:${Math.max(0, Math.min(100, realized))}%"></span>
     </div>
@@ -862,7 +1029,7 @@ function executiveReportRows(projects) {
         <td>${isStudyProject(project) || isConstructionProject(project) ? "-" : `${variance > 0 ? "+" : ""}${variance} p.p.`}</td>
         <td>${dashboard.lateTasks ?? 0}</td>
         <td>${dashboard.attentionTasks ?? 0}</td>
-        <td>${escapeHtml(executiveRecommendation(project))}${notes ? `<small>${escapeHtml(notes)}</small>` : ""}</td>
+        <td>${escapeHtml(executiveRecommendation(project))}${notes ? `<div class="report-note markdown-content">${markdownBlock(notes)}</div>` : ""}</td>
       </tr>
     `;
   }).join("");
@@ -939,7 +1106,7 @@ function buildExecutiveReport() {
           <tr>
             <td><strong>${escapeHtml(project.name)}</strong></td>
             <td><span class="report-status study">Em estudo</span></td>
-            <td>${escapeHtml(project.description || executiveRecommendation(project))}</td>
+            <td><div class="markdown-content">${markdownBlock(project.description || executiveRecommendation(project))}</div></td>
           </tr>
         `).join("")}</tbody>
       </table>` : `<p class="report-empty">Nenhum estudo cadastrado.</p>`}
@@ -1289,6 +1456,7 @@ copyReportButton.addEventListener("click", async () => {
     copyReportButton.setAttribute("aria-label", "Copiar status report");
   }, 1600);
 });
+setupMarkdownEditors();
 loadSettings()
   .catch(() => updateCriteriaText())
   .then(loadProjects);

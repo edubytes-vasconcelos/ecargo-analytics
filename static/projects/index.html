@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Portal E-Cargo | Evolutivas</title>
-    <link rel="stylesheet" href="__BASE_PATH__/projects/styles.css?v=10" />
+    <link rel="stylesheet" href="__BASE_PATH__/projects/styles.css?v=11" />
   </head>
   <body>
     <header class="topbar">
@@ -51,7 +51,7 @@
           </label>
           <label class="wide-field">
             Informações
-            <textarea id="projectInfo" name="notes" rows="3" placeholder="Resumo, escopo ou status inicial da evolutiva"></textarea>
+            <textarea id="projectInfo" name="notes" rows="3" data-markdown="true" placeholder="Resumo, escopo ou status inicial da evolutiva"></textarea>
           </label>
           <button type="submit">Adicionar evolutiva</button>
         </form>
@@ -70,7 +70,7 @@
           </label>
           <label>
             Descrição
-            <textarea id="studyDescription" name="description" rows="3"></textarea>
+            <textarea id="studyDescription" name="description" rows="3" data-markdown="true"></textarea>
           </label>
           <button type="submit">Adicionar estudo</button>
         </form>
@@ -287,7 +287,7 @@
         </div>
         <label>
           Observações
-          <textarea id="projectNotes" rows="10"></textarea>
+          <textarea id="projectNotes" rows="10" data-markdown="true"></textarea>
         </label>
         <div class="modal-actions">
           <button id="saveNotesButton" type="button">Salvar informações</button>
@@ -308,7 +308,7 @@
           </label>
           <label id="studyEditDescriptionField">
             Descrição
-            <textarea id="studyEditDescription" name="description" rows="8"></textarea>
+            <textarea id="studyEditDescription" name="description" rows="8" data-markdown="true"></textarea>
           </label>
           <div class="modal-actions">
             <button type="submit">Salvar cadastro</button>
@@ -317,6 +317,6 @@
       </div>
     </div>
 
-    <script src="__BASE_PATH__/projects/app.js?v=24"></script>
+    <script src="__BASE_PATH__/projects/app.js?v=25"></script>
   </body>
 </html>
