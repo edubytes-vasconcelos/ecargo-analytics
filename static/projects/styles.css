@@ -491,16 +491,22 @@ textarea {
 .dashboard-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
-  align-items: stretch;
+  align-items: start;
   gap: 14px;
 }
 
 .summary-card {
   display: flex;
   flex-direction: column;
+  height: 440px;
   min-width: 0;
   padding: 15px;
   border-top: 4px solid var(--blue);
+}
+
+.summary-card.is-expanded {
+  height: auto;
+  min-height: 440px;
 }
 
 .summary-card.risk {
@@ -676,6 +682,9 @@ dt {
 }
 
 .note-preview {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
   margin-top: 12px;
   padding: 10px;
   border: 1px solid var(--line);
@@ -685,6 +694,11 @@ dt {
   font-size: 13px;
   line-height: 1.4;
   white-space: pre-wrap;
+}
+
+.summary-card.is-expanded .note-preview {
+  flex: 0 0 auto;
+  overflow: visible;
 }
 
 .markdown-content {
@@ -746,6 +760,30 @@ dt {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.35;
+}
+
+.card-expand-row {
+  display: flex;
+  align-items: end;
+  justify-content: flex-end;
+  flex: 0 0 34px;
+  min-height: 34px;
+  padding-top: 6px;
+}
+
+.card-expand-toggle {
+  min-height: 28px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--brand-dark);
+  padding: 0 4px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.card-expand-toggle:hover {
+  border-color: var(--line);
+  background: var(--panel-soft);
 }
 
 .summary-actions {
@@ -1292,6 +1330,14 @@ dd {
 
   .summary-actions {
     grid-template-columns: 1fr;
+  }
+
+  .summary-card {
+    height: 560px;
+  }
+
+  .summary-card.is-expanded {
+    min-height: 560px;
   }
 
   .settings-actions,
