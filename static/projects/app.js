@@ -55,6 +55,23 @@ const closeWorkItemButton = document.querySelector("#closeWorkItemButton");
 const deleteWorkItemButton = document.querySelector("#deleteWorkItemButton");
 const projectUiState = new Map();
 const appBasePath = document.documentElement.dataset.basePath || "";
+const WORK_ITEM_VIEW_STORAGE_KEY = "projects:workItemView";
+
+function getStoredWorkItemView() {
+  try {
+    return localStorage.getItem(WORK_ITEM_VIEW_STORAGE_KEY) || "list";
+  } catch {
+    return "list";
+  }
+}
+
+function setStoredWorkItemView(view) {
+  try {
+    localStorage.setItem(WORK_ITEM_VIEW_STORAGE_KEY, view);
+  } catch {
+    /* localStorage indisponível (modo privado etc.) — preferência não persiste nesta sessão */
+  }
+}
 const scheduleUpdateInput = document.createElement("input");
 scheduleUpdateInput.type = "file";
 scheduleUpdateInput.accept = ".xml,.mpp,.mpt";
@@ -1067,7 +1084,7 @@ function renderWorkItems(root, project) {
   const archivedItems = allItems.filter((item) => item.archived);
   const state = projectUiState.get(project.id);
   state.workItemFilter ||= "all";
-  state.workItemView ||= "list";
+  state.workItemView ||= getStoredWorkItemView();
   const requirements = activeItems.filter((item) => item.type === "requirement");
   const definitions = activeItems.filter((item) => item.type === "technical-definition");
   const bugs = activeItems.filter((item) => item.type === "bug");
@@ -1080,18 +1097,16 @@ function renderWorkItems(root, project) {
   `;
 
   const viewSwitch = root.querySelector("[data-field='workItemViewSwitch']");
-  const viewOptions = [["list", "Lista"]];
+  const viewOptions = [["list", "Lista"], ["status", "Por status"]];
   if (state.workItemFilter === "bug") viewOptions.push(["grouped", "Por definição"]);
   if (state.workItemFilter !== "archived") viewOptions.push(["kanban", "Kanban"]);
   if (!viewOptions.some(([value]) => value === state.workItemView)) state.workItemView = "list";
   viewSwitch.innerHTML = viewOptions.map(([value, label]) => `<button type="button" class="${state.workItemView === value ? "active" : ""}" data-view="${value}">${label}</button>`).join("");
   viewSwitch.querySelectorAll("button").forEach((button) => button.addEventListener("click", () => {
     state.workItemView = button.dataset.view;
+    setStoredWorkItemView(state.workItemView);
     renderProjectDetail(project);
   }));
-  const addColumnButton = root.querySelector("[data-action='add-kanban-column']");
-  addColumnButton.hidden = state.workItemView !== "kanban";
-  addColumnButton.addEventListener("click", () => createWorkItemColumn(project));
   const filters = root.querySelector("[data-field='workItemFilters']");
   const filterOptions = [["all", "Todas"], ["requirement", "Requisitos"], ["technical-definition", "Definições"], ["bug", "Bugs"], ["archived", `Arquivadas (${archivedItems.length})`]];
   filters.innerHTML = filterOptions.map(([value, label]) => `<button type="button" class="${state.workItemFilter === value ? "active" : ""}" data-filter="${value}">${label}</button>`).join("");
@@ -1113,27 +1128,57 @@ function renderWorkItems(root, project) {
     return;
   }
   if (state.workItemView === "kanban") {
-    renderWorkItemKanban(list, visible, allItems, project);
+    renderWorkItemKanban(list, visible, allItems, project, state);
+    return;
+  }
+  if (state.workItemView === "status") {
+    renderWorkItemsByStatus(list, visible, allItems, project);
     return;
   }
   list.className = "work-item-list";
   const listItems = orderWorkItemsAsTree(visible, allItems, state.workItemFilter);
-  list.innerHTML = listItems.map(({ item, depth }) => {
-    const parent = allItems.find((candidate) => candidate.id === item.parentId);
-    const childCount = allItems.filter((candidate) => candidate.parentId === item.id).length;
-    return `<article class="work-item-row type-${item.type} tree-depth-${depth}" style="--tree-depth:${depth}" data-work-item-id="${escapeHtml(item.id)}">
-      ${workItemMenuHtml(item)}
-      <div class="work-item-kind">${escapeHtml(workItemTypes[item.type] || item.type)}</div>
-      <div class="work-item-main">
-        <div class="work-item-title-line"><h4>${escapeHtml(item.title)}</h4><span class="work-status status-${escapeHtml(item.status)}">${escapeHtml(workItemStatusLabel(project, item))}</span></div>
-        ${parent ? `<p class="work-item-parent">Vinculada a: ${escapeHtml(parent.title)}</p>` : ""}
-        ${item.description ? `<p>${escapeHtml(item.description)}</p>` : ""}
-      </div>
-      <div class="work-item-meta">${childCount ? `<span>${childCount} vinculada${childCount > 1 ? "s" : ""}</span>` : ""}
-      </div>
-    </article>`;
-  }).join("") || `<p class="hint">Nenhuma atividade neste filtro.</p>`;
+  list.innerHTML = listItems.map(({ item, depth }) => workItemRowHtml(item, depth, allItems, project)).join("") || `<p class="hint">Nenhuma atividade neste filtro.</p>`;
   bindWorkItemActions(list, allItems, project);
+}
+
+function workItemRowHtml(item, depth, allItems, project) {
+  const parent = allItems.find((candidate) => candidate.id === item.parentId);
+  const childCount = allItems.filter((candidate) => candidate.parentId === item.id).length;
+  return `<article class="work-item-row type-${item.type} tree-depth-${depth}" style="--tree-depth:${depth}" data-work-item-id="${escapeHtml(item.id)}">
+    ${workItemMenuHtml(item)}
+    <div class="work-item-kind">${escapeHtml(workItemTypes[item.type] || item.type)}</div>
+    <div class="work-item-main">
+      <div class="work-item-title-line"><h4>${escapeHtml(item.title)}</h4>${statusPillHtml(project, item)}</div>
+      ${parent ? `<p class="work-item-parent">Vinculada a: ${escapeHtml(parent.title)}</p>` : ""}
+      ${item.description ? `<p>${escapeHtml(item.description)}</p>` : ""}
+    </div>
+    <div class="work-item-meta">${childCount ? `<span>${childCount} vinculada${childCount > 1 ? "s" : ""}</span>` : ""}
+    </div>
+  </article>`;
+}
+
+function renderWorkItemsByStatus(container, visible, allItems, project) {
+  const groups = new Map();
+  visible.forEach((item) => {
+    if (!groups.has(item.status)) groups.set(item.status, []);
+    groups.get(item.status).push(item);
+  });
+  const stageRank = { backlog: 0, progress: 1, blocked: 2, done: 3 };
+  const entries = [...groups.entries()].sort((a, b) => {
+    const rankA = stageRank[workItemStage({ status: a[0] })] ?? 4;
+    const rankB = stageRank[workItemStage({ status: b[0] })] ?? 4;
+    return rankA !== rankB ? rankA - rankB : a[0].localeCompare(b[0]);
+  });
+  container.className = "work-item-status-groups";
+  container.innerHTML = entries.map(([status, items]) => {
+    const label = workItemStatusLabel(project, items[0]);
+    const stage = workItemStage(items[0]);
+    return `<section class="work-item-status-group stage-${stage}">
+      <div class="work-item-status-group-head"><h4>${escapeHtml(label)}</h4><span>${items.length}</span></div>
+      <div class="work-item-status-group-body">${items.map((item) => workItemRowHtml(item, 0, allItems, project)).join("")}</div>
+    </section>`;
+  }).join("") || `<p class="hint">Nenhuma atividade neste filtro.</p>`;
+  bindWorkItemActions(container, allItems, project);
 }
 
 function orderWorkItemsAsTree(visible, allItems, filter) {
@@ -1180,8 +1225,8 @@ function renderWorkItemGroups(container, visible, allItems, project, filter) {
       <button type="button" class="grouped-work-item-open" data-action="edit-work-item">
         <span>${escapeHtml(workItemTypes[item.type] || item.type)}</span>
         <strong>${escapeHtml(item.title)}</strong>
-        <span class="work-status status-${escapeHtml(item.status)}">${escapeHtml(workItemStatusLabel(project, item))}</span>
       </button>
+      ${statusPillHtml(project, item)}
     </article>`).join("")}</div>
   </section>`).join("") || `<p class="hint">Nenhuma atividade neste filtro.</p>`;
   bindWorkItemActions(container, allItems, project);
@@ -1201,6 +1246,22 @@ function workItemStatusLabel(project, item) {
     || item.status;
 }
 
+function workItemStatusOptions(project, item) {
+  const base = workItemStatuses[item.type] || {};
+  const custom = Object.fromEntries((project.workItemColumns || []).map((column) => [column.id, column.title]));
+  return { ...base, ...custom };
+}
+
+function statusPillHtml(project, item) {
+  const options = workItemStatusOptions(project, item);
+  return `<details class="status-pill-menu">
+    <summary class="work-status status-${escapeHtml(item.status)}">${escapeHtml(workItemStatusLabel(project, item))}</summary>
+    <div class="status-pill-popover">
+      ${Object.entries(options).map(([value, label]) => `<button type="button" class="${value === item.status ? "active" : ""}" data-status="${escapeHtml(value)}">${escapeHtml(label)}</button>`).join("")}
+    </div>
+  </details>`;
+}
+
 function workItemMenuHtml(item) {
   return `<details class="work-item-menu">
     <summary title="Ações" aria-label="Ações">•••</summary>
@@ -1212,20 +1273,56 @@ function workItemMenuHtml(item) {
   </details>`;
 }
 
-async function createWorkItemColumn(project) {
-  const title = window.prompt("Nome da nova lista:");
-  if (title === null || !title.trim()) return;
+function kanbanColumnMenuHtml(column) {
+  return `<details class="work-item-menu kanban-column-menu">
+    <summary title="Ações da lista" aria-label="Ações da lista">•••</summary>
+    <div class="work-item-menu-popover">
+      <button type="button" data-action="archive-kanban-column">${column.archived ? "Restaurar lista" : "Arquivar lista"}</button>
+      <button type="button" class="danger-link" data-action="delete-kanban-column">Excluir lista</button>
+    </div>
+  </details>`;
+}
+
+async function setKanbanColumnArchived(projectId, column, archived) {
+  const response = await fetch(`${appBasePath}/api/projects/${projectId}/work-item-columns/${column.id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ archived }),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    alert(body.error || `Nao foi possivel ${archived ? "arquivar" : "restaurar"} a lista.`);
+    return;
+  }
+  await loadProjects();
+}
+
+async function deleteKanbanColumn(projectId, column) {
+  if (!window.confirm(`Excluir a lista "${column.title}"?`)) return;
+  const response = await fetch(`${appBasePath}/api/projects/${projectId}/work-item-columns/${column.id}`, { method: "DELETE" });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    alert(body.error || "Nao foi possivel excluir a lista.");
+    return;
+  }
+  await loadProjects();
+}
+
+async function submitKanbanColumn(project, title) {
+  const trimmed = title.trim();
+  if (!trimmed) return false;
   const response = await fetch(`${appBasePath}/api/projects/${project.id}/work-item-columns`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ title: title.trim() }),
+    body: JSON.stringify({ title: trimmed }),
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
     alert(body.error || "Nao foi possivel criar a lista.");
-    return;
+    return false;
   }
   await loadProjects();
+  return true;
 }
 
 function workItemStatusForStage(type, stage) {
@@ -1238,40 +1335,121 @@ function workItemStatusForStage(type, stage) {
   return mappings[type]?.[stage] || null;
 }
 
-function renderWorkItemKanban(container, visible, allItems, project) {
-  const columns = [
-    ["backlog", "A fazer"],
-    ["progress", "Em andamento"],
-    ["blocked", "Bloqueado"],
-    ["done", "Concluído"],
-    ...(project.workItemColumns || []).map((column) => [column.id, column.title]),
-  ];
+const kanbanBuiltInColumns = [
+  { id: "backlog", title: "A fazer" },
+  { id: "progress", title: "Em andamento" },
+  { id: "blocked", title: "Bloqueado" },
+  { id: "done", title: "Concluído" },
+];
+
+function kanbanColumnOrder(project) {
+  const customIds = (project.workItemColumns || []).filter((column) => !column.archived).map((column) => column.id);
+  const availableIds = [...kanbanBuiltInColumns.map((column) => column.id), ...customIds];
+  const stored = (project.workItemColumnOrder || []).filter((id) => availableIds.includes(id));
+  return [...stored, ...availableIds.filter((id) => !stored.includes(id))];
+}
+
+function renderWorkItemKanban(container, visible, allItems, project, state) {
+  const customColumns = project.workItemColumns || [];
+  const customById = new Map(customColumns.filter((column) => !column.archived).map((column) => [column.id, column]));
+  const builtInById = new Map(kanbanBuiltInColumns.map((column) => [column.id, column]));
+  const columns = kanbanColumnOrder(project).map((id) => customById.has(id)
+    ? { ...customById.get(id), custom: true }
+    : { ...builtInById.get(id), custom: false });
+  const archivedColumns = customColumns.filter((column) => column.archived);
   container.className = "work-item-kanban";
-  container.innerHTML = columns.map(([stage, label]) => {
-    const cards = visible.filter((item) => workItemStage(item) === stage);
-    return `<section class="kanban-column stage-${stage}" data-kanban-stage="${stage}">
-      <div class="kanban-column-head"><h4>${label}</h4><span>${cards.length}</span></div>
+  container.innerHTML = columns.map((column) => {
+    const cards = visible.filter((item) => workItemStage(item) === column.id);
+    return `<section class="kanban-column stage-${column.id}" data-kanban-stage="${escapeHtml(column.id)}">
+      <div class="kanban-column-head" draggable="true"><h4>${escapeHtml(column.title)}</h4><span>${cards.length}</span>${column.custom ? kanbanColumnMenuHtml(column) : ""}</div>
       <div class="kanban-column-body">${cards.map((item) => {
         const parent = allItems.find((candidate) => candidate.id === item.parentId);
+        const childCount = allItems.filter((candidate) => candidate.parentId === item.id).length;
         return `<article draggable="true" class="kanban-card type-${item.type}" data-work-item-id="${escapeHtml(item.id)}">
           ${workItemMenuHtml(item)}
           <button type="button" class="kanban-card-open" data-action="edit-work-item">
             <span class="kanban-kind">${escapeHtml(workItemTypes[item.type] || item.type)}</span>
             <strong>${escapeHtml(item.title)}</strong>
-            <span class="work-status status-${escapeHtml(item.status)}">${escapeHtml(workItemStatusLabel(project, item))}</span>
-            ${parent ? `<small>${escapeHtml(parent.title)}</small>` : ""}
           </button>
+          ${statusPillHtml(project, item)}
+          ${parent ? `<small class="kanban-card-parent">${escapeHtml(parent.title)}</small>` : ""}
+          ${childCount ? `<small class="kanban-card-children">${childCount} vinculada${childCount > 1 ? "s" : ""}</small>` : ""}
         </article>`;
       }).join("") || `<span class="kanban-empty">Sem atividades</span>`}
-      <button type="button" class="kanban-add" data-action="kanban-add" data-stage="${stage}">Adicionar cartão</button></div>
+      <button type="button" class="kanban-add" data-action="kanban-add" data-stage="${escapeHtml(column.id)}">Adicionar cartão</button></div>
     </section>`;
-  }).join("");
+  }).join("")
+  + (state.kanbanAddListOpen
+    ? `<form class="kanban-list-composer" data-action="kanban-add-list-form">
+        <input type="text" name="title" placeholder="Nome da lista" data-field="kanbanNewListInput" autocomplete="off" maxlength="60" />
+        <div class="kanban-list-composer-actions">
+          <button type="submit">Adicionar lista</button>
+          <button type="button" class="kanban-list-composer-cancel" data-action="cancel-add-list" title="Cancelar" aria-label="Cancelar">✕</button>
+        </div>
+      </form>`
+    : `<button type="button" class="kanban-add-list-trigger" data-action="open-add-list">+ Adicionar lista</button>`)
+  + (archivedColumns.length
+    ? (state.kanbanArchivedOpen
+      ? `<div class="kanban-archived-panel">
+          <div class="kanban-archived-panel-head"><span>Listas arquivadas</span><button type="button" data-action="toggle-archived-lists" aria-label="Fechar">✕</button></div>
+          ${archivedColumns.map((column) => `<div class="kanban-archived-row" data-kanban-stage="${escapeHtml(column.id)}">
+            <span>${escapeHtml(column.title)}</span>
+            <button type="button" data-action="restore-kanban-column">Restaurar</button>
+          </div>`).join("")}
+        </div>`
+      : `<button type="button" class="kanban-archived-trigger" data-action="toggle-archived-lists">Listas arquivadas (${archivedColumns.length})</button>`)
+    : "");
   bindWorkItemActions(container, allItems, project);
   container.querySelectorAll("[data-action='kanban-add']").forEach((button) => button.addEventListener("click", () => {
     const preferredType = ["requirement", "technical-definition", "bug"].includes(filterForProject(project)) ? filterForProject(project) : "requirement";
     openWorkItemEditor(project, null, button.dataset.stage, preferredType);
   }));
   enableKanbanDragging(container, allItems, project);
+  enableKanbanColumnDragging(container, project);
+
+  container.querySelectorAll("[data-action='archive-kanban-column']").forEach((button) => button.addEventListener("click", async () => {
+    const columnId = button.closest("[data-kanban-stage]").dataset.kanbanStage;
+    const column = customColumns.find((candidate) => candidate.id === columnId);
+    if (column) await setKanbanColumnArchived(project.id, column, !column.archived);
+  }));
+  container.querySelectorAll("[data-action='delete-kanban-column']").forEach((button) => button.addEventListener("click", async () => {
+    const columnId = button.closest("[data-kanban-stage]").dataset.kanbanStage;
+    const column = customColumns.find((candidate) => candidate.id === columnId);
+    if (column) await deleteKanbanColumn(project.id, column);
+  }));
+  container.querySelectorAll("[data-action='restore-kanban-column']").forEach((button) => button.addEventListener("click", async () => {
+    const columnId = button.closest("[data-kanban-stage]").dataset.kanbanStage;
+    const column = customColumns.find((candidate) => candidate.id === columnId);
+    if (column) await setKanbanColumnArchived(project.id, column, false);
+  }));
+  container.querySelectorAll("[data-action='toggle-archived-lists']").forEach((button) => button.addEventListener("click", () => {
+    state.kanbanArchivedOpen = !state.kanbanArchivedOpen;
+    renderProjectDetail(project);
+  }));
+
+  const trigger = container.querySelector("[data-action='open-add-list']");
+  if (trigger) trigger.addEventListener("click", () => {
+    state.kanbanAddListOpen = true;
+    renderProjectDetail(project);
+  });
+  const composerForm = container.querySelector("[data-action='kanban-add-list-form']");
+  if (composerForm) {
+    const input = composerForm.querySelector("[data-field='kanbanNewListInput']");
+    input.focus();
+    const closeComposer = () => {
+      state.kanbanAddListOpen = false;
+      renderProjectDetail(project);
+    };
+    composerForm.querySelector("[data-action='cancel-add-list']").addEventListener("click", closeComposer);
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") closeComposer();
+    });
+    composerForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const created = await submitKanbanColumn(project, input.value);
+      if (created) state.kanbanAddListOpen = false;
+    });
+  }
 }
 
 function filterForProject(project) {
@@ -1295,12 +1473,14 @@ function enableKanbanDragging(container, allItems, project) {
   });
   container.querySelectorAll(".kanban-column").forEach((column) => {
     column.addEventListener("dragover", (event) => {
+      if (event.dataTransfer.types.includes("application/x-kanban-column")) return;
       event.preventDefault();
       column.classList.add("drag-over");
       event.dataTransfer.dropEffect = "move";
     });
     column.addEventListener("dragleave", () => column.classList.remove("drag-over"));
     column.addEventListener("drop", async (event) => {
+      if (event.dataTransfer.types.includes("application/x-kanban-column")) return;
       event.preventDefault();
       column.classList.remove("drag-over");
       const id = draggedId || event.dataTransfer.getData("text/plain");
@@ -1310,6 +1490,58 @@ function enableKanbanDragging(container, allItems, project) {
       await updateWorkItemStatus(project.id, item, status);
     });
   });
+}
+
+function enableKanbanColumnDragging(container, project) {
+  let draggedColumnId = null;
+  container.querySelectorAll(".kanban-column-head").forEach((head) => {
+    const column = head.closest(".kanban-column");
+    head.addEventListener("dragstart", (event) => {
+      draggedColumnId = column.dataset.kanbanStage;
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("application/x-kanban-column", draggedColumnId);
+      column.classList.add("column-dragging");
+    });
+    head.addEventListener("dragend", () => {
+      container.querySelectorAll(".kanban-column").forEach((candidate) => candidate.classList.remove("column-dragging", "column-drag-over"));
+      draggedColumnId = null;
+    });
+  });
+  container.querySelectorAll(".kanban-column").forEach((column) => {
+    column.addEventListener("dragover", (event) => {
+      if (!event.dataTransfer.types.includes("application/x-kanban-column")) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      column.classList.add("column-drag-over");
+    });
+    column.addEventListener("dragleave", () => column.classList.remove("column-drag-over"));
+    column.addEventListener("drop", async (event) => {
+      if (!event.dataTransfer.types.includes("application/x-kanban-column")) return;
+      event.preventDefault();
+      column.classList.remove("column-drag-over");
+      const targetId = column.dataset.kanbanStage;
+      if (!draggedColumnId || draggedColumnId === targetId) return;
+      await reorderKanbanColumns(project, draggedColumnId, targetId);
+    });
+  });
+}
+
+async function reorderKanbanColumns(project, draggedId, targetId) {
+  const order = kanbanColumnOrder(project);
+  if (!order.includes(draggedId) || !order.includes(targetId)) return;
+  const nextOrder = order.filter((id) => id !== draggedId);
+  nextOrder.splice(nextOrder.indexOf(targetId), 0, draggedId);
+  const response = await fetch(`${appBasePath}/api/projects/${project.id}/work-item-column-order`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ order: nextOrder }),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    alert(body.error || "Nao foi possivel reordenar as listas.");
+    return;
+  }
+  await loadProjects();
 }
 
 async function updateWorkItemStatus(projectId, item, status) {
@@ -1340,6 +1572,14 @@ function bindWorkItemActions(container, allItems, project) {
     const id = button.closest("[data-work-item-id]").dataset.workItemId;
     const item = allItems.find((candidate) => candidate.id === id);
     if (item) await deleteWorkItem(project.id, item, allItems);
+  }));
+  container.querySelectorAll(".status-pill-popover button").forEach((button) => button.addEventListener("click", async () => {
+    const details = button.closest(".status-pill-menu");
+    details.open = false;
+    const id = button.closest("[data-work-item-id]").dataset.workItemId;
+    const item = allItems.find((candidate) => candidate.id === id);
+    const status = button.dataset.status;
+    if (item && status && status !== item.status) await updateWorkItemStatus(project.id, item, status);
   }));
 }
 

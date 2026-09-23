@@ -1916,6 +1916,58 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_PATCH(self) -> None:
         path = self._route_path()
+        order_match = re.fullmatch(r"/api/projects/([^/]+)/work-item-column-order", path)
+        if order_match:
+            try:
+                length = int(self.headers.get("Content-Length", "0") or "0")
+                payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+                order = payload.get("order")
+                if not isinstance(order, list) or not all(isinstance(item, str) for item in order):
+                    self._send_json({"error": "Ordem inválida."}, 400)
+                    return
+                projects = read_projects()
+                project = _find_project(projects, order_match.group(1))
+                if project is None:
+                    self._send_json({"error": "Projeto não encontrado."}, 404)
+                    return
+                project["workItemColumnOrder"] = order
+                project["updatedAt"] = datetime.now().isoformat(timespec="seconds")
+                write_projects(projects)
+                self._send_json({"order": order})
+            except (ValueError, json.JSONDecodeError) as exc:
+                self._send_json({"error": str(exc)}, 400)
+            return
+
+        column_match = re.fullmatch(r"/api/projects/([^/]+)/work-item-columns/([^/]+)", path)
+        if column_match:
+            try:
+                length = int(self.headers.get("Content-Length", "0") or "0")
+                payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+                projects = read_projects()
+                project = _find_project(projects, column_match.group(1))
+                if project is None:
+                    self._send_json({"error": "Projeto não encontrado."}, 404)
+                    return
+                columns = project.get("workItemColumns") or []
+                column = next((c for c in columns if str(c.get("id")) == column_match.group(2)), None)
+                if column is None:
+                    self._send_json({"error": "Lista não encontrada."}, 404)
+                    return
+                if "archived" in payload:
+                    column["archived"] = bool(payload.get("archived"))
+                if "title" in payload:
+                    title = str(payload.get("title", "")).strip()
+                    if not title:
+                        self._send_json({"error": "Informe o nome da lista."}, 400)
+                        return
+                    column["title"] = title
+                project["updatedAt"] = datetime.now().isoformat(timespec="seconds")
+                write_projects(projects)
+                self._send_json(column)
+            except (ValueError, json.JSONDecodeError) as exc:
+                self._send_json({"error": str(exc)}, 400)
+            return
+
         work_item_match = re.fullmatch(r"/api/projects/([^/]+)/work-items/([^/]+)", path)
         if work_item_match:
             try:
@@ -1988,6 +2040,30 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as exc:
                 self._send_json({"error": str(exc)}, 400)
             return
+        column_match = re.fullmatch(r"/api/projects/([^/]+)/work-item-columns/([^/]+)", path)
+        if column_match:
+            projects = read_projects()
+            project = _find_project(projects, column_match.group(1))
+            if project is None:
+                self._send_json({"error": "Projeto não encontrado."}, 404)
+                return
+            column_id = column_match.group(2)
+            columns = project.get("workItemColumns") or []
+            column = next((c for c in columns if str(c.get("id")) == column_id), None)
+            if column is None:
+                self._send_json({"error": "Lista não encontrada."}, 404)
+                return
+            in_use = any(str(item.get("status")) == column_id for item in (project.get("workItems") or []))
+            if in_use:
+                self._send_json({"error": "Mova ou exclua as atividades desta lista antes de excluí-la."}, 400)
+                return
+            project["workItemColumns"] = [c for c in columns if str(c.get("id")) != column_id]
+            project["updatedAt"] = datetime.now().isoformat(timespec="seconds")
+            write_projects(projects)
+            self.send_response(204)
+            self.end_headers()
+            return
+
         work_item_match = re.fullmatch(r"/api/projects/([^/]+)/work-items/([^/]+)", path)
         if work_item_match:
             projects = read_projects()
