@@ -1471,7 +1471,6 @@ dd {
   gap: 12px;
   overflow-x: auto;
   padding: 14px 10px 10px;
-  margin: 0 -10px;
   background: linear-gradient(180deg, #eef3f5, #e7edf1);
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -1608,7 +1607,11 @@ dd {
   position: absolute;
   top: 10px;
   left: 10px;
-  z-index: 7;
+  z-index: 1;
+}
+
+.work-item-menu[open] {
+  z-index: 50;
 }
 
 .work-item-menu summary {
@@ -1664,7 +1667,12 @@ dd {
 
 .status-pill-menu {
   position: relative;
+  z-index: 1;
   flex: 0 0 auto;
+}
+
+.status-pill-menu[open] {
+  z-index: 50;
 }
 
 .status-pill-menu > summary {

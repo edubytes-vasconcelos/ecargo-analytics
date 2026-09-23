@@ -2079,6 +2079,30 @@ deleteWorkPlanImageButton.addEventListener("click", deleteWorkPlanImage);
 refreshButton.addEventListener("click", loadProjects);
 exportDashboardButton.addEventListener("click", exportDashboardPdf);
 window.addEventListener("resize", schedulePercentageAlignment);
+document.addEventListener("toggle", (event) => {
+  const details = event.target;
+  if (!(details instanceof HTMLDetailsElement)) return;
+  const popover = details.querySelector(":scope > .work-item-menu-popover, :scope > .status-pill-popover");
+  if (!popover) return;
+  popover.style.top = "";
+  popover.style.bottom = "";
+  popover.style.left = "";
+  popover.style.right = "";
+  if (!details.open) return;
+  const margin = 8;
+  const rect = popover.getBoundingClientRect();
+  if (rect.bottom > window.innerHeight - margin) {
+    popover.style.top = "auto";
+    popover.style.bottom = "calc(100% + 4px)";
+  }
+  if (rect.right > window.innerWidth - margin) {
+    popover.style.left = "auto";
+    popover.style.right = "0";
+  } else if (rect.left < margin) {
+    popover.style.left = "0";
+    popover.style.right = "auto";
+  }
+}, true);
 window.addEventListener("afterprint", () => {
   document.body.classList.remove("print-report");
   executiveReport.setAttribute("aria-hidden", "true");
