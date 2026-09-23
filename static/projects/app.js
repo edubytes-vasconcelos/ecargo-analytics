@@ -358,6 +358,7 @@ function setupMarkdownEditors() {
     const toolbar = document.createElement("div");
     toolbar.className = "markdown-toolbar";
     toolbar.setAttribute("aria-label", "Ferramentas de formatação Markdown");
+    const formatButtons = [];
     tools.forEach(([action, label, title]) => {
       const button = document.createElement("button");
       button.type = "button";
@@ -376,9 +377,46 @@ function setupMarkdownEditors() {
       } else {
         button.addEventListener("click", () => applyMarkdownFormat(textarea, action));
       }
+      formatButtons.push(button);
       toolbar.appendChild(button);
     });
+
+    const preview = document.createElement("div");
+    preview.className = "markdown-preview markdown-content";
+    preview.hidden = true;
+
+    const previewButton = document.createElement("button");
+    previewButton.type = "button";
+    previewButton.className = "markdown-preview-toggle";
+    previewButton.textContent = "Ver";
+    previewButton.title = "Pré-visualizar formatação";
+    previewButton.setAttribute("aria-label", "Pré-visualizar formatação");
+    previewButton.addEventListener("click", () => {
+      const enteringPreview = !textarea.hidden;
+      if (enteringPreview) {
+        preview.innerHTML = markdownBlock(textarea.value) || `<p class="hint">Nada para pré-visualizar.</p>`;
+        textarea.hidden = true;
+        preview.hidden = false;
+        formatButtons.forEach((button) => { button.disabled = true; });
+        previewButton.textContent = "Editar";
+        previewButton.title = "Voltar a editar";
+      } else {
+        textarea.hidden = false;
+        preview.hidden = true;
+        formatButtons.forEach((button) => { button.disabled = false; });
+        previewButton.textContent = "Ver";
+        previewButton.title = "Pré-visualizar formatação";
+        textarea.focus();
+      }
+    });
+    toolbar.appendChild(previewButton);
+
     textarea.insertAdjacentElement("beforebegin", toolbar);
+    textarea.insertAdjacentElement("afterend", preview);
+    textarea._markdownPreview = preview;
+    textarea._markdownPreviewButton = previewButton;
+    textarea._markdownFormatButtons = formatButtons;
+
     textarea.addEventListener("paste", (event) => {
       const file = imageFileFromDataTransfer(event.clipboardData);
       if (!file) return;
@@ -395,6 +433,18 @@ function setupMarkdownEditors() {
       uploadAndInsertMarkdownImage(textarea, file);
     });
   });
+}
+
+function resetMarkdownPreview(textarea) {
+  const preview = textarea?._markdownPreview;
+  if (!preview) return;
+  textarea.hidden = false;
+  preview.hidden = true;
+  (textarea._markdownFormatButtons || []).forEach((button) => { button.disabled = false; });
+  if (textarea._markdownPreviewButton) {
+    textarea._markdownPreviewButton.textContent = "Ver";
+    textarea._markdownPreviewButton.title = "Pré-visualizar formatação";
+  }
 }
 
 function statusClass(status) {
@@ -585,6 +635,7 @@ function openStudyEditor(project) {
   studyEditProjectId = project.id;
   studyEditName.value = project.name || "";
   studyEditDescription.value = project.description || "";
+  resetMarkdownPreview(studyEditDescription);
   studyEditDescriptionField.hidden = !isStudyProject(project);
   studyEditModal.hidden = false;
   studyEditName.focus();
@@ -1730,6 +1781,7 @@ function openWorkItemEditor(project, item = null, stage = null, preferredType = 
   else if (stage) workItemStatus.value = workItemStatusForStage(workItemType.value, stage);
   workItemTitle.value = item?.title || "";
   workItemDescription.value = item?.description || "";
+  resetMarkdownPreview(workItemDescription);
   workItemType.disabled = Boolean(item);
   deleteWorkItemButton.hidden = !item;
   workItemModal.hidden = false;
