@@ -741,6 +741,14 @@ dt {
   font-weight: 800;
 }
 
+.markdown-image {
+  display: block;
+  max-width: min(100%, 420px);
+  margin-top: 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
 .report-note {
   margin-top: 5px;
   color: var(--muted);
@@ -1462,7 +1470,11 @@ dd {
 
 .work-item-list {
   display: grid;
+  align-content: start;
   gap: 8px;
+  max-height: 520px;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .work-item-kanban {
@@ -1634,11 +1646,8 @@ dd {
 }
 
 .work-item-menu-popover {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: auto;
-  left: 0;
-  z-index: 8;
+  position: fixed;
+  z-index: 900;
   display: grid;
   min-width: 130px;
   padding: 5px;
@@ -1699,11 +1708,8 @@ dd {
 }
 
 .status-pill-popover {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: auto;
-  z-index: 8;
+  position: fixed;
+  z-index: 900;
   display: grid;
   min-width: 170px;
   max-height: 240px;
@@ -1735,12 +1741,6 @@ dd {
 .status-pill-popover button.active {
   color: var(--brand-dark);
   font-weight: 800;
-}
-
-.kanban-card .status-pill-popover,
-.grouped-work-item .status-pill-popover {
-  left: auto;
-  right: 0;
 }
 
 .grouped-work-item.type-bug {
@@ -1865,16 +1865,13 @@ dd {
   background: #dde3e7;
 }
 
-.kanban-column-menu .work-item-menu-popover {
-  left: auto;
-  right: 0;
-}
-
 .kanban-column-body {
   display: grid;
   align-content: start;
   gap: 8px;
   min-height: 40px;
+  max-height: 520px;
+  overflow-y: auto;
   padding: 2px 8px 8px;
 }
 
@@ -1919,7 +1916,6 @@ dd {
 .kanban-card:hover {
   z-index: 1;
   box-shadow: 0 4px 10px rgba(9, 30, 66, 0.18);
-  transform: translateY(-1px);
 }
 
 .kanban-card.dragging {
@@ -1979,11 +1975,6 @@ dd {
 
 .kanban-card > .work-item-menu summary:hover {
   background: #edf1f3;
-}
-
-.kanban-card > .work-item-menu .work-item-menu-popover {
-  left: auto;
-  right: 0;
 }
 
 .kanban-card strong,

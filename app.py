@@ -43,6 +43,8 @@ PROJECT_UPLOADS = DATA_DIR / "project_uploads"
 PROJECT_UPLOADS.mkdir(parents=True, exist_ok=True)
 PROJECT_PLAN_UPLOADS = DATA_DIR / "project_plan_uploads"
 PROJECT_PLAN_UPLOADS.mkdir(parents=True, exist_ok=True)
+WORK_ITEM_IMAGE_UPLOADS = DATA_DIR / "work_item_images"
+WORK_ITEM_IMAGE_UPLOADS.mkdir(parents=True, exist_ok=True)
 LEGACY_REPO = ROOT / "chamados222pendencias.exe-master" / "chamados222pendencias.exe-master"
 LEGACY_SOURCE = LEGACY_REPO / "Chamados222Pendencias" / "Repository" / "Impls" / "ChamadosRepository.cs"
 GRAPH_BASE_URL = "https://graph.microsoft.com/v1.0"
@@ -790,6 +792,7 @@ def start_background_sync() -> None:
 
 PROJECT_EXTENSIONS = {".xml", ".mpp", ".mpt"}
 PROJECT_PLAN_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
+WORK_ITEM_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 DEFAULT_PROJECT_SETTINGS = {"attentionDelayPercent": 10, "negativeVarianceAttention": False, "workPlanImage": None}
 
 
@@ -955,6 +958,24 @@ def _save_project_plan_image(file_item) -> dict:
         "uploadedAt": datetime.now().isoformat(timespec="seconds"),
         "size": stat.st_size,
         "url": f"{BASE_PATH}/api/project-plan-image?v={image_id}",
+    }
+
+
+def _save_work_item_image(file_item) -> dict:
+    original_name = Path(str(getattr(file_item, "filename", "") or "")).name
+    suffix = Path(original_name).suffix.lower()
+    if suffix not in WORK_ITEM_IMAGE_EXTENSIONS:
+        raise RuntimeError("Formato inválido. Envie uma imagem .png, .jpg, .jpeg, .webp ou .gif.")
+
+    image_id = uuid.uuid4().hex
+    filename = f"{image_id}{suffix}"
+    target = WORK_ITEM_IMAGE_UPLOADS / filename
+    with target.open("wb") as fh:
+        fh.write(file_item.file.read())
+    return {
+        "id": image_id,
+        "name": original_name,
+        "url": f"{BASE_PATH}/api/work-item-images/{filename}",
     }
 
 
@@ -1652,6 +1673,25 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return
+        work_item_image_match = re.fullmatch(r"/api/work-item-images/([^/]+)", path)
+        if work_item_image_match:
+            image_path = (WORK_ITEM_IMAGE_UPLOADS / work_item_image_match.group(1)).resolve()
+            uploads_root = WORK_ITEM_IMAGE_UPLOADS.resolve()
+            if uploads_root not in image_path.parents:
+                self.send_error(403)
+                return
+            if not image_path.exists() or not image_path.is_file():
+                self.send_error(404)
+                return
+            content_type = mimetypes.guess_type(str(image_path))[0] or "application/octet-stream"
+            body = image_path.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "public, max-age=31536000, immutable")
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if path == "/api/fetch-222":
             params = parse_qs(urlparse(self.path).query)
             hours = int(params.get("hours", ["24"])[0] or "24")
@@ -1885,6 +1925,17 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 image = _save_project_plan_image(file_item)
                 self._send_json(write_project_settings({"workPlanImage": image}))
+            except Exception as exc:
+                self._send_json({"error": str(exc)}, 400)
+            return
+
+        if path == "/api/work-item-images":
+            try:
+                _fields, file_item = _read_form_data(self.headers, self.rfile)
+                if file_item is None or not getattr(file_item, "filename", ""):
+                    self._send_json({"error": "Envie uma imagem .png, .jpg, .jpeg, .webp ou .gif."}, 400)
+                    return
+                self._send_json(_save_work_item_image(file_item), 201)
             except Exception as exc:
                 self._send_json({"error": str(exc)}, 400)
             return

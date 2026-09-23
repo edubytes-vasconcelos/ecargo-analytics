@@ -162,6 +162,9 @@ function renderInlineMarkdown(value) {
   let text = String(value ?? "");
 
   text = text.replace(/`([^`]+)`/g, (_, code) => token(`<code>${escapeHtml(code)}</code>`));
+  text = text.replace(/!\[([^\]]*)\]\(((?:https?:\/\/|\/)[^\s)]+)\)/g, (_, alt, src) => {
+    return token(`<img class="markdown-image" src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" loading="lazy" />`);
+  });
   text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_, label, href) => {
     return token(`<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${renderInlineMarkdown(label)}</a>`);
   });
@@ -286,6 +289,58 @@ function applyMarkdownFormat(textarea, action) {
   }
 }
 
+function insertMarkdownImageAt(textarea, image, start, end) {
+  const value = textarea.value;
+  const markdown = `![${image.name}](${image.url})`;
+  textarea.value = `${value.slice(0, start)}${markdown}${value.slice(end)}`;
+  textarea.focus();
+  const cursor = start + markdown.length;
+  textarea.setSelectionRange(cursor, cursor);
+  textarea.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+function insertMarkdownImage(textarea, image) {
+  insertMarkdownImageAt(textarea, image, textarea.selectionStart, textarea.selectionEnd);
+}
+
+async function uploadAndInsertMarkdownImage(textarea, file) {
+  if (!file) return;
+  const start = textarea.selectionStart;
+  const end = textarea.selectionEnd;
+  textarea.disabled = true;
+  try {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await fetch(`${appBasePath}/api/work-item-images`, { method: "POST", body: formData });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      alert(body.error || "Nao foi possivel enviar a imagem.");
+      return;
+    }
+    insertMarkdownImageAt(textarea, body, start, end);
+  } finally {
+    textarea.disabled = false;
+  }
+}
+
+async function uploadMarkdownImage(textarea, file, button) {
+  if (!file) return;
+  button.disabled = true;
+  try {
+    await uploadAndInsertMarkdownImage(textarea, file);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function imageFileFromDataTransfer(dataTransfer) {
+  if (!dataTransfer) return null;
+  const items = Array.from(dataTransfer.items || []);
+  const imageItem = items.find((item) => item.kind === "file" && item.type.startsWith("image/"));
+  if (imageItem) return imageItem.getAsFile();
+  return Array.from(dataTransfer.files || []).find((file) => file.type.startsWith("image/")) || null;
+}
+
 function setupMarkdownEditors() {
   const tools = [
     ["bold", "B", "Negrito"],
@@ -294,6 +349,7 @@ function setupMarkdownEditors() {
     ["list", "-", "Lista"],
     ["link", "Link", "Link"],
     ["code", "</>", "Código"],
+    ["image", "Img", "Inserir imagem"],
   ];
 
   document.querySelectorAll("textarea[data-markdown='true']").forEach((textarea) => {
@@ -309,10 +365,35 @@ function setupMarkdownEditors() {
       button.textContent = label;
       button.title = title;
       button.setAttribute("aria-label", title);
-      button.addEventListener("click", () => applyMarkdownFormat(textarea, action));
+      if (action === "image") {
+        button.addEventListener("click", () => {
+          const input = document.createElement("input");
+          input.type = "file";
+          input.accept = "image/png,image/jpeg,image/webp,image/gif";
+          input.addEventListener("change", () => uploadMarkdownImage(textarea, input.files[0], button));
+          input.click();
+        });
+      } else {
+        button.addEventListener("click", () => applyMarkdownFormat(textarea, action));
+      }
       toolbar.appendChild(button);
     });
     textarea.insertAdjacentElement("beforebegin", toolbar);
+    textarea.addEventListener("paste", (event) => {
+      const file = imageFileFromDataTransfer(event.clipboardData);
+      if (!file) return;
+      event.preventDefault();
+      uploadAndInsertMarkdownImage(textarea, file);
+    });
+    textarea.addEventListener("dragover", (event) => {
+      if (imageFileFromDataTransfer(event.dataTransfer)) event.preventDefault();
+    });
+    textarea.addEventListener("drop", (event) => {
+      const file = imageFileFromDataTransfer(event.dataTransfer);
+      if (!file) return;
+      event.preventDefault();
+      uploadAndInsertMarkdownImage(textarea, file);
+    });
   });
 }
 
@@ -1150,7 +1231,7 @@ function workItemRowHtml(item, depth, allItems, project) {
     <div class="work-item-main">
       <div class="work-item-title-line"><h4>${escapeHtml(item.title)}</h4>${statusPillHtml(project, item)}</div>
       ${parent ? `<p class="work-item-parent">Vinculada a: ${escapeHtml(parent.title)}</p>` : ""}
-      ${item.description ? `<p>${escapeHtml(item.description)}</p>` : ""}
+      ${item.description ? `<div class="work-item-description markdown-content">${markdownBlock(item.description)}</div>` : ""}
     </div>
     <div class="work-item-meta">${childCount ? `<span>${childCount} vinculada${childCount > 1 ? "s" : ""}</span>` : ""}
     </div>
@@ -2079,30 +2160,50 @@ deleteWorkPlanImageButton.addEventListener("click", deleteWorkPlanImage);
 refreshButton.addEventListener("click", loadProjects);
 exportDashboardButton.addEventListener("click", exportDashboardPdf);
 window.addEventListener("resize", schedulePercentageAlignment);
+function popoverFor(details) {
+  return details.querySelector(":scope > .work-item-menu-popover, :scope > .status-pill-popover");
+}
+
 document.addEventListener("toggle", (event) => {
   const details = event.target;
   if (!(details instanceof HTMLDetailsElement)) return;
-  const popover = details.querySelector(":scope > .work-item-menu-popover, :scope > .status-pill-popover");
+  const popover = popoverFor(details);
   if (!popover) return;
-  popover.style.top = "";
-  popover.style.bottom = "";
-  popover.style.left = "";
-  popover.style.right = "";
-  if (!details.open) return;
-  const margin = 8;
-  const rect = popover.getBoundingClientRect();
-  if (rect.bottom > window.innerHeight - margin) {
-    popover.style.top = "auto";
-    popover.style.bottom = "calc(100% + 4px)";
+  if (!details.open) {
+    popover.style.cssText = "";
+    return;
   }
+  const margin = 8;
+  const summary = details.querySelector(":scope > summary");
+  const anchor = (summary || details).getBoundingClientRect();
+  popover.style.top = `${anchor.bottom + 4}px`;
+  popover.style.left = `${anchor.left}px`;
+  popover.style.right = "auto";
+  popover.style.bottom = "auto";
+  const rect = popover.getBoundingClientRect();
   if (rect.right > window.innerWidth - margin) {
     popover.style.left = "auto";
-    popover.style.right = "0";
-  } else if (rect.left < margin) {
-    popover.style.left = "0";
-    popover.style.right = "auto";
+    popover.style.right = `${Math.max(margin, window.innerWidth - anchor.right)}px`;
+  }
+  if (rect.bottom > window.innerHeight - margin) {
+    popover.style.top = "auto";
+    popover.style.bottom = `${Math.max(margin, window.innerHeight - anchor.top + 4)}px`;
   }
 }, true);
+
+document.addEventListener("scroll", (event) => {
+  document.querySelectorAll(".work-item-menu[open], .status-pill-menu[open]").forEach((details) => {
+    if (details.contains(event.target)) return;
+    details.open = false;
+  });
+}, true);
+
+document.addEventListener("click", (event) => {
+  document.querySelectorAll(".work-item-menu[open], .status-pill-menu[open]").forEach((details) => {
+    if (details.contains(event.target)) return;
+    details.open = false;
+  });
+});
 window.addEventListener("afterprint", () => {
   document.body.classList.remove("print-report");
   executiveReport.setAttribute("aria-hidden", "true");
