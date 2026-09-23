@@ -41,6 +41,18 @@ const criteriaDescription = document.querySelector("#criteriaDescription");
 const workPlanImageInput = document.querySelector("#workPlanImageInput");
 const workPlanUploadStatus = document.querySelector("#workPlanUploadStatus");
 const deleteWorkPlanImageButton = document.querySelector("#deleteWorkPlanImageButton");
+const workItemModal = document.querySelector("#workItemModal");
+const workItemForm = document.querySelector("#workItemForm");
+const workItemModalTitle = document.querySelector("#workItemModalTitle");
+const workItemType = document.querySelector("#workItemType");
+const workItemStatus = document.querySelector("#workItemStatus");
+const workItemParentField = document.querySelector("#workItemParentField");
+const workItemParentLabel = document.querySelector("#workItemParentLabel");
+const workItemParent = document.querySelector("#workItemParent");
+const workItemTitle = document.querySelector("#workItemTitle");
+const workItemDescription = document.querySelector("#workItemDescription");
+const closeWorkItemButton = document.querySelector("#closeWorkItemButton");
+const deleteWorkItemButton = document.querySelector("#deleteWorkItemButton");
 const projectUiState = new Map();
 const appBasePath = document.documentElement.dataset.basePath || "";
 const scheduleUpdateInput = document.createElement("input");
@@ -59,10 +71,23 @@ let selectedProjectId = localStorage.getItem("selectedProjectId") || null;
 let draggedDashboardCard = null;
 let draggedDashboardSection = null;
 let percentageAlignmentFrame = null;
+let editingWorkItemId = null;
+let workItemProjectId = null;
+let pendingWorkItemStage = null;
 const dashboardOrderKey = "ecargo.projects.dashboardOrder";
 const dashboardCollapsedKey = "ecargo.projects.dashboardCollapsed";
 const dashboardGroupOrderKey = "ecargo.projects.dashboardGroupOrder";
 const defaultDashboardGroupOrder = ["work-plan", "projects", "studies"];
+const workItemTypes = {
+  requirement: "Análise de Requisitos",
+  "technical-definition": "Definição Técnica",
+  bug: "Bug",
+};
+const workItemStatuses = {
+  requirement: { backlog: "Não iniciada", analysis: "Em análise", approved: "Aprovada", blocked: "Bloqueada" },
+  "technical-definition": { backlog: "Não iniciada", definition: "Em definição", "ready-for-test": "Pronta para teste", testing: "Em teste", done: "Concluída", blocked: "Bloqueada" },
+  bug: { open: "Aberto", fixing: "Em correção", "ready-for-retest": "Pronto para reteste", blocked: "Bloqueado", closed: "Fechado" },
+};
 
 function formatDate(value, withTime = false) {
   if (!value) return "Nao informado";
@@ -824,11 +849,13 @@ function createConstructionCard(project) {
     </div>
     <div class="note-preview markdown-content">${markdownBlock(project.notes, "Evolutiva em construção aguardando cronograma ou definição complementar.")}</div>
     <div class="summary-actions construction-actions">
+      <button type="button" data-action="open">Abrir evolutiva</button>
       <button type="button" data-action="update">Atualizar cronograma</button>
       <button type="button" data-action="notes">Informações</button>
       <button type="button" data-action="delete">Excluir</button>
     </div>
   `;
+  card.querySelector("[data-action='open']").addEventListener("click", () => openProject(project.id));
   card.querySelector("[data-action='edit']").addEventListener("click", () => openStudyEditor(project));
   card.querySelector("[data-action='update']").addEventListener("click", () => chooseScheduleUpdate(project.id));
   card.querySelector("[data-action='notes']").addEventListener("click", () => openNotes(project));
@@ -840,6 +867,7 @@ function createProjectCard(project) {
   const { dashboard, realized, planned, variance, selectedFile } = getDashboardNumbers(project);
   const riskClass = projectRiskClass(dashboard, variance);
   const notes = String(project.notes || "").trim();
+  const openBugs = (project.workItems || []).filter((item) => item.type === "bug" && item.status !== "closed").length;
   const card = createDashboardCard(project, riskClass);
   card.innerHTML = `
     <div class="summary-head">
@@ -857,6 +885,7 @@ function createProjectCard(project) {
       <div><span>Realizado</span><strong>${realized}%</strong></div>
       <div><span>Desvio</span><strong>${variance > 0 ? "+" : ""}${variance} p.p.</strong></div>
     </div>
+    ${(project.workItems || []).length ? `<div class="activity-glance"><span>${project.workItems.length} atividades</span><strong class="${openBugs ? "has-open-bugs" : ""}">${openBugs} bugs abertos</strong></div>` : ""}
     ${notes ? `<div class="note-preview markdown-content">${markdownBlock(notes)}</div>` : ""}
     <div class="summary-progress">
       <span style="width:${Math.max(0, Math.min(100, realized))}%"></span>
@@ -997,6 +1026,12 @@ function renderProjectDetail(project) {
   node.querySelector("[data-action='report']").addEventListener("click", () => openStatusReport(project));
   node.querySelector("[data-action='update']").addEventListener("click", () => chooseScheduleUpdate(project.id));
   node.querySelector("[data-action='notes']").addEventListener("click", () => openNotes(project));
+  node.querySelector("[data-action='add-work-item']").addEventListener("click", () => openWorkItemEditor(project));
+
+  configureCollapsiblePanel(node, taskState, "schedule", "[data-field='scheduleBody']", "[data-action='toggle-schedule']");
+  configureCollapsiblePanel(node, taskState, "work-items", "[data-field='workItemsBody']", "[data-action='toggle-work-items']");
+
+  renderWorkItems(node, project);
 
   const taskContainer = node.querySelector("[data-field='tasks']");
   const filtersContainer = node.querySelector("[data-field='taskFilters']");
@@ -1007,6 +1042,384 @@ function renderProjectDetail(project) {
   repaintTasks();
 
   projectsEl.appendChild(node);
+}
+
+function configureCollapsiblePanel(root, state, key, bodySelector, buttonSelector) {
+  const body = root.querySelector(bodySelector);
+  const button = root.querySelector(buttonSelector);
+  const collapsed = state.collapsed.has(key);
+  body.hidden = collapsed;
+  button.textContent = collapsed ? "Expandir" : "Recolher";
+  button.setAttribute("aria-expanded", String(!collapsed));
+  button.addEventListener("click", () => {
+    if (state.collapsed.has(key)) state.collapsed.delete(key);
+    else state.collapsed.add(key);
+    const isCollapsed = state.collapsed.has(key);
+    body.hidden = isCollapsed;
+    button.textContent = isCollapsed ? "Expandir" : "Recolher";
+    button.setAttribute("aria-expanded", String(!isCollapsed));
+  });
+}
+
+function renderWorkItems(root, project) {
+  const allItems = project.workItems || [];
+  const activeItems = allItems.filter((item) => !item.archived);
+  const archivedItems = allItems.filter((item) => item.archived);
+  const state = projectUiState.get(project.id);
+  state.workItemFilter ||= "all";
+  state.workItemView ||= "list";
+  const requirements = activeItems.filter((item) => item.type === "requirement");
+  const definitions = activeItems.filter((item) => item.type === "technical-definition");
+  const bugs = activeItems.filter((item) => item.type === "bug");
+  const openBugs = bugs.filter((item) => item.status !== "closed");
+  const summary = root.querySelector("[data-field='workItemSummary']");
+  summary.innerHTML = `
+    <div><strong>${requirements.length}</strong><span>Requisitos</span></div>
+    <div><strong>${definitions.length}</strong><span>Definições técnicas</span></div>
+    <div class="${openBugs.length ? "attention" : ""}"><strong>${openBugs.length}</strong><span>Bugs abertos</span></div>
+  `;
+
+  const viewSwitch = root.querySelector("[data-field='workItemViewSwitch']");
+  const viewOptions = [["list", "Lista"]];
+  if (state.workItemFilter === "bug") viewOptions.push(["grouped", "Por definição"]);
+  if (state.workItemFilter !== "archived") viewOptions.push(["kanban", "Kanban"]);
+  if (!viewOptions.some(([value]) => value === state.workItemView)) state.workItemView = "list";
+  viewSwitch.innerHTML = viewOptions.map(([value, label]) => `<button type="button" class="${state.workItemView === value ? "active" : ""}" data-view="${value}">${label}</button>`).join("");
+  viewSwitch.querySelectorAll("button").forEach((button) => button.addEventListener("click", () => {
+    state.workItemView = button.dataset.view;
+    renderProjectDetail(project);
+  }));
+  const addColumnButton = root.querySelector("[data-action='add-kanban-column']");
+  addColumnButton.hidden = state.workItemView !== "kanban";
+  addColumnButton.addEventListener("click", () => createWorkItemColumn(project));
+  const filters = root.querySelector("[data-field='workItemFilters']");
+  const filterOptions = [["all", "Todas"], ["requirement", "Requisitos"], ["technical-definition", "Definições"], ["bug", "Bugs"], ["archived", `Arquivadas (${archivedItems.length})`]];
+  filters.innerHTML = filterOptions.map(([value, label]) => `<button type="button" class="${state.workItemFilter === value ? "active" : ""}" data-filter="${value}">${label}</button>`).join("");
+  filters.querySelectorAll("button").forEach((button) => button.addEventListener("click", () => {
+    state.workItemFilter = button.dataset.filter;
+    renderProjectDetail(project);
+  }));
+
+  const list = root.querySelector("[data-field='workItems']");
+  if (!allItems.length) {
+    list.innerHTML = `<div class="work-item-empty"><strong>Nenhuma atividade registrada</strong><span>Comece pela Análise de Requisitos e vincule as próximas etapas.</span></div>`;
+    return;
+  }
+  const visible = state.workItemFilter === "archived"
+    ? archivedItems
+    : activeItems.filter((item) => state.workItemFilter === "all" || item.type === state.workItemFilter);
+  if (state.workItemView === "grouped") {
+    renderWorkItemGroups(list, visible, allItems, project, state.workItemFilter);
+    return;
+  }
+  if (state.workItemView === "kanban") {
+    renderWorkItemKanban(list, visible, allItems, project);
+    return;
+  }
+  list.className = "work-item-list";
+  const listItems = orderWorkItemsAsTree(visible, allItems, state.workItemFilter);
+  list.innerHTML = listItems.map(({ item, depth }) => {
+    const parent = allItems.find((candidate) => candidate.id === item.parentId);
+    const childCount = allItems.filter((candidate) => candidate.parentId === item.id).length;
+    return `<article class="work-item-row type-${item.type} tree-depth-${depth}" style="--tree-depth:${depth}" data-work-item-id="${escapeHtml(item.id)}">
+      ${workItemMenuHtml(item)}
+      <div class="work-item-kind">${escapeHtml(workItemTypes[item.type] || item.type)}</div>
+      <div class="work-item-main">
+        <div class="work-item-title-line"><h4>${escapeHtml(item.title)}</h4><span class="work-status status-${escapeHtml(item.status)}">${escapeHtml(workItemStatusLabel(project, item))}</span></div>
+        ${parent ? `<p class="work-item-parent">Vinculada a: ${escapeHtml(parent.title)}</p>` : ""}
+        ${item.description ? `<p>${escapeHtml(item.description)}</p>` : ""}
+      </div>
+      <div class="work-item-meta">${childCount ? `<span>${childCount} vinculada${childCount > 1 ? "s" : ""}</span>` : ""}
+      </div>
+    </article>`;
+  }).join("") || `<p class="hint">Nenhuma atividade neste filtro.</p>`;
+  bindWorkItemActions(list, allItems, project);
+}
+
+function orderWorkItemsAsTree(visible, allItems, filter) {
+  if (filter !== "all") return visible.map((item) => ({ item, depth: 0 }));
+  const visibleIds = new Set(visible.map((item) => item.id));
+  const childrenByParent = new Map();
+  visible.forEach((item) => {
+    if (!childrenByParent.has(item.parentId)) childrenByParent.set(item.parentId, []);
+    childrenByParent.get(item.parentId).push(item);
+  });
+  const ordered = [];
+  const visited = new Set();
+  const appendBranch = (item, depth) => {
+    if (visited.has(item.id)) return;
+    visited.add(item.id);
+    ordered.push({ item, depth });
+    (childrenByParent.get(item.id) || []).forEach((child) => appendBranch(child, depth + 1));
+  };
+  visible.filter((item) => !item.parentId || !visibleIds.has(item.parentId)).forEach((item) => appendBranch(item, 0));
+  visible.forEach((item) => appendBranch(item, 0));
+  return ordered;
+}
+
+function renderWorkItemGroups(container, visible, allItems, project, filter) {
+  const parentType = filter === "bug" ? "technical-definition" : "requirement";
+  const parents = allItems.filter((item) => item.type === parentType);
+  const groups = parents.map((parent) => ({
+    parent,
+    children: visible.filter((item) => item.parentId === parent.id),
+  })).filter((group) => group.children.length);
+  const unlinked = visible.filter((item) => !parents.some((parent) => parent.id === item.parentId));
+  if (unlinked.length) groups.push({ parent: null, children: unlinked });
+  container.className = "work-item-groups";
+  container.innerHTML = groups.map(({ parent, children }) => `<section class="work-item-group">
+    <div class="work-item-group-head">
+      <div>
+        <span>${filter === "bug" ? "Definição Técnica" : "Análise de Requisitos"}</span>
+        <h4>${escapeHtml(parent?.title || "Sem vínculo")}</h4>
+      </div>
+      <strong>${children.length}</strong>
+    </div>
+    <div class="work-item-group-body">${children.map((item) => `<article class="grouped-work-item type-${item.type}" data-work-item-id="${escapeHtml(item.id)}">
+      ${workItemMenuHtml(item)}
+      <button type="button" class="grouped-work-item-open" data-action="edit-work-item">
+        <span>${escapeHtml(workItemTypes[item.type] || item.type)}</span>
+        <strong>${escapeHtml(item.title)}</strong>
+        <span class="work-status status-${escapeHtml(item.status)}">${escapeHtml(workItemStatusLabel(project, item))}</span>
+      </button>
+    </article>`).join("")}</div>
+  </section>`).join("") || `<p class="hint">Nenhuma atividade neste filtro.</p>`;
+  bindWorkItemActions(container, allItems, project);
+}
+
+function workItemStage(item) {
+  if (["approved", "done", "closed"].includes(item.status)) return "done";
+  if (item.status === "blocked") return "blocked";
+  if (["backlog", "open"].includes(item.status)) return "backlog";
+  if (["analysis", "definition", "ready-for-test", "testing", "fixing", "ready-for-retest"].includes(item.status)) return "progress";
+  return item.status;
+}
+
+function workItemStatusLabel(project, item) {
+  return workItemStatuses[item.type]?.[item.status]
+    || (project.workItemColumns || []).find((column) => column.id === item.status)?.title
+    || item.status;
+}
+
+function workItemMenuHtml(item) {
+  return `<details class="work-item-menu">
+    <summary title="Ações" aria-label="Ações">•••</summary>
+    <div class="work-item-menu-popover">
+      <button type="button" data-action="edit-work-item">Editar</button>
+      <button type="button" data-action="archive-work-item">${item.archived ? "Restaurar" : "Arquivar"}</button>
+      <button type="button" class="danger-link" data-action="delete-work-item">Excluir</button>
+    </div>
+  </details>`;
+}
+
+async function createWorkItemColumn(project) {
+  const title = window.prompt("Nome da nova lista:");
+  if (title === null || !title.trim()) return;
+  const response = await fetch(`${appBasePath}/api/projects/${project.id}/work-item-columns`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: title.trim() }),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    alert(body.error || "Nao foi possivel criar a lista.");
+    return;
+  }
+  await loadProjects();
+}
+
+function workItemStatusForStage(type, stage) {
+  if (String(stage).startsWith("custom-")) return stage;
+  const mappings = {
+    requirement: { backlog: "backlog", progress: "analysis", blocked: "blocked", done: "approved" },
+    "technical-definition": { backlog: "backlog", progress: "definition", blocked: "blocked", done: "done" },
+    bug: { backlog: "open", progress: "fixing", blocked: "blocked", done: "closed" },
+  };
+  return mappings[type]?.[stage] || null;
+}
+
+function renderWorkItemKanban(container, visible, allItems, project) {
+  const columns = [
+    ["backlog", "A fazer"],
+    ["progress", "Em andamento"],
+    ["blocked", "Bloqueado"],
+    ["done", "Concluído"],
+    ...(project.workItemColumns || []).map((column) => [column.id, column.title]),
+  ];
+  container.className = "work-item-kanban";
+  container.innerHTML = columns.map(([stage, label]) => {
+    const cards = visible.filter((item) => workItemStage(item) === stage);
+    return `<section class="kanban-column stage-${stage}" data-kanban-stage="${stage}">
+      <div class="kanban-column-head"><h4>${label}</h4><span>${cards.length}</span></div>
+      <div class="kanban-column-body">${cards.map((item) => {
+        const parent = allItems.find((candidate) => candidate.id === item.parentId);
+        return `<article draggable="true" class="kanban-card type-${item.type}" data-work-item-id="${escapeHtml(item.id)}">
+          ${workItemMenuHtml(item)}
+          <button type="button" class="kanban-card-open" data-action="edit-work-item">
+            <span class="kanban-kind">${escapeHtml(workItemTypes[item.type] || item.type)}</span>
+            <strong>${escapeHtml(item.title)}</strong>
+            <span class="work-status status-${escapeHtml(item.status)}">${escapeHtml(workItemStatusLabel(project, item))}</span>
+            ${parent ? `<small>${escapeHtml(parent.title)}</small>` : ""}
+          </button>
+        </article>`;
+      }).join("") || `<span class="kanban-empty">Sem atividades</span>`}
+      <button type="button" class="kanban-add" data-action="kanban-add" data-stage="${stage}">Adicionar cartão</button></div>
+    </section>`;
+  }).join("");
+  bindWorkItemActions(container, allItems, project);
+  container.querySelectorAll("[data-action='kanban-add']").forEach((button) => button.addEventListener("click", () => {
+    const preferredType = ["requirement", "technical-definition", "bug"].includes(filterForProject(project)) ? filterForProject(project) : "requirement";
+    openWorkItemEditor(project, null, button.dataset.stage, preferredType);
+  }));
+  enableKanbanDragging(container, allItems, project);
+}
+
+function filterForProject(project) {
+  return projectUiState.get(project.id)?.workItemFilter || "all";
+}
+
+function enableKanbanDragging(container, allItems, project) {
+  let draggedId = null;
+  container.querySelectorAll(".kanban-card").forEach((card) => {
+    card.addEventListener("dragstart", (event) => {
+      draggedId = card.dataset.workItemId;
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", draggedId);
+      card.classList.add("dragging");
+    });
+    card.addEventListener("dragend", () => {
+      card.classList.remove("dragging");
+      container.querySelectorAll(".kanban-column").forEach((column) => column.classList.remove("drag-over"));
+      draggedId = null;
+    });
+  });
+  container.querySelectorAll(".kanban-column").forEach((column) => {
+    column.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      column.classList.add("drag-over");
+      event.dataTransfer.dropEffect = "move";
+    });
+    column.addEventListener("dragleave", () => column.classList.remove("drag-over"));
+    column.addEventListener("drop", async (event) => {
+      event.preventDefault();
+      column.classList.remove("drag-over");
+      const id = draggedId || event.dataTransfer.getData("text/plain");
+      const item = allItems.find((candidate) => candidate.id === id);
+      const status = workItemStatusForStage(item?.type, column.dataset.kanbanStage);
+      if (!item || !status || item.status === status) return;
+      await updateWorkItemStatus(project.id, item, status);
+    });
+  });
+}
+
+async function updateWorkItemStatus(projectId, item, status) {
+  const response = await fetch(`${appBasePath}/api/projects/${projectId}/work-items/${item.id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...item, status }),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    alert(body.error || "Nao foi possivel mover a atividade.");
+    return;
+  }
+  await loadProjects();
+}
+
+function bindWorkItemActions(container, allItems, project) {
+  container.querySelectorAll("[data-action='edit-work-item']").forEach((button) => button.addEventListener("click", () => {
+    const id = button.closest("[data-work-item-id]").dataset.workItemId;
+    openWorkItemEditor(project, allItems.find((item) => item.id === id));
+  }));
+  container.querySelectorAll("[data-action='archive-work-item']").forEach((button) => button.addEventListener("click", async () => {
+    const id = button.closest("[data-work-item-id]").dataset.workItemId;
+    const item = allItems.find((candidate) => candidate.id === id);
+    if (item) await setWorkItemArchived(project.id, item, !item.archived);
+  }));
+  container.querySelectorAll("[data-action='delete-work-item']").forEach((button) => button.addEventListener("click", async () => {
+    const id = button.closest("[data-work-item-id]").dataset.workItemId;
+    const item = allItems.find((candidate) => candidate.id === id);
+    if (item) await deleteWorkItem(project.id, item, allItems);
+  }));
+}
+
+async function setWorkItemArchived(projectId, item, archived) {
+  const response = await fetch(`${appBasePath}/api/projects/${projectId}/work-items/${item.id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...item, archived }),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    alert(body.error || `Nao foi possivel ${archived ? "arquivar" : "restaurar"} a atividade.`);
+    return;
+  }
+  await loadProjects();
+}
+
+async function deleteWorkItem(projectId, item, allItems) {
+  const branch = new Set([item.id]);
+  let changed = true;
+  while (changed) {
+    const size = branch.size;
+    allItems.forEach((candidate) => {
+      if (branch.has(candidate.parentId)) branch.add(candidate.id);
+    });
+    changed = branch.size !== size;
+  }
+  const dependents = branch.size - 1;
+  const warning = dependents ? ` Esta ação também excluirá ${dependents} atividade(s) vinculada(s).` : "";
+  if (!window.confirm(`Excluir ${item.title}?${warning}`)) return;
+  const response = await fetch(`${appBasePath}/api/projects/${projectId}/work-items/${item.id}`, { method: "DELETE" });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    alert(body.error || "Nao foi possivel excluir a atividade.");
+    return;
+  }
+  await loadProjects();
+}
+
+function updateWorkItemFormOptions(project, selectedParentId = "") {
+  const type = workItemType.value;
+  const statuses = {
+    ...(workItemStatuses[type] || {}),
+    ...Object.fromEntries((project.workItemColumns || []).map((column) => [column.id, column.title])),
+  };
+  const previousStatus = workItemStatus.value;
+  workItemStatus.innerHTML = Object.entries(statuses).map(([value, label]) => `<option value="${value}">${label}</option>`).join("");
+  if (statuses[previousStatus]) workItemStatus.value = previousStatus;
+  const parentType = type === "technical-definition" ? "requirement" : type === "bug" ? "technical-definition" : null;
+  workItemParentField.hidden = !parentType;
+  if (!parentType) return;
+  workItemParentLabel.textContent = type === "bug" ? "Definição Técnica vinculada" : "Análise de Requisitos vinculada";
+  const parents = (project.workItems || []).filter((item) => item.type === parentType);
+  workItemParent.innerHTML = `<option value="">Selecione</option>${parents.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.title)}</option>`).join("")}`;
+  workItemParent.value = selectedParentId || "";
+}
+
+function openWorkItemEditor(project, item = null, stage = null, preferredType = null) {
+  workItemProjectId = project.id;
+  editingWorkItemId = item?.id || null;
+  workItemForm.reset();
+  workItemModalTitle.textContent = item ? "Editar atividade" : "Nova atividade";
+  pendingWorkItemStage = stage;
+  workItemType.value = item?.type || preferredType || "requirement";
+  updateWorkItemFormOptions(project, item?.parentId || "");
+  if (item) workItemStatus.value = item.status;
+  else if (stage) workItemStatus.value = workItemStatusForStage(workItemType.value, stage);
+  workItemTitle.value = item?.title || "";
+  workItemDescription.value = item?.description || "";
+  workItemType.disabled = Boolean(item);
+  deleteWorkItemButton.hidden = !item;
+  workItemModal.hidden = false;
+}
+
+function closeWorkItemEditor() {
+  workItemModal.hidden = true;
+  editingWorkItemId = null;
+  workItemProjectId = null;
+  workItemType.disabled = false;
+  pendingWorkItemStage = null;
 }
 
 function renderCurrentView() {
@@ -1441,6 +1854,54 @@ closeStudyEditButton.addEventListener("click", () => {
   studyEditModal.hidden = true;
   studyEditProjectId = null;
   editingProject = null;
+});
+workItemType.addEventListener("change", () => {
+  const project = projectsCache.find((item) => item.id === workItemProjectId);
+  if (project) {
+    updateWorkItemFormOptions(project);
+    if (pendingWorkItemStage) workItemStatus.value = workItemStatusForStage(workItemType.value, pendingWorkItemStage);
+  }
+});
+closeWorkItemButton.addEventListener("click", closeWorkItemEditor);
+workItemForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!workItemProjectId) return;
+  const payload = {
+    type: workItemType.value,
+    status: workItemStatus.value,
+    title: workItemTitle.value.trim(),
+    description: workItemDescription.value.trim(),
+    parentId: workItemParentField.hidden ? null : workItemParent.value,
+  };
+  const suffix = editingWorkItemId ? `/${editingWorkItemId}` : "";
+  const response = await fetch(`${appBasePath}/api/projects/${workItemProjectId}/work-items${suffix}`, {
+    method: editingWorkItemId ? "PATCH" : "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    alert(body.error || "Nao foi possivel salvar a atividade.");
+    return;
+  }
+  closeWorkItemEditor();
+  await loadProjects();
+});
+deleteWorkItemButton.addEventListener("click", async () => {
+  if (!workItemProjectId || !editingWorkItemId) return;
+  const project = projectsCache.find((item) => item.id === workItemProjectId);
+  const item = (project?.workItems || []).find((candidate) => candidate.id === editingWorkItemId);
+  const children = (project?.workItems || []).filter((candidate) => candidate.parentId === editingWorkItemId).length;
+  const warning = children ? ` Esta ação também excluirá ${children} atividade(s) vinculada(s).` : "";
+  if (!window.confirm(`Excluir ${item?.title || "esta atividade"}?${warning}`)) return;
+  const response = await fetch(`${appBasePath}/api/projects/${workItemProjectId}/work-items/${editingWorkItemId}`, { method: "DELETE" });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    alert(body.error || "Nao foi possivel excluir a atividade.");
+    return;
+  }
+  closeWorkItemEditor();
+  await loadProjects();
 });
 studyEditForm.addEventListener("submit", async (event) => {
   event.preventDefault();

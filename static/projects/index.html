@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Portal E-Cargo | Evolutivas</title>
-    <link rel="stylesheet" href="__BASE_PATH__/projects/styles.css?v=13" />
+    <link rel="stylesheet" href="__BASE_PATH__/projects/styles.css?v=21" />
   </head>
   <body>
     <header class="topbar">
@@ -153,13 +153,38 @@
             <small>Planejado e realizado vêm da linha resumo do Project quando disponível.</small>
           </div>
         </div>
-        <div class="task-panel">
+        <section class="task-panel collapsible-panel" aria-labelledby="schedule-title">
           <div class="task-title">
-            <span>Tarefas na ordem do cronograma</span>
-            <div class="task-filters" data-field="taskFilters"></div>
+            <div>
+              <h3 id="schedule-title">Cronograma</h3>
+              <span>Tarefas na ordem do planejamento</span>
+            </div>
+            <button type="button" class="collapse-button" data-action="toggle-schedule" aria-expanded="true">Recolher</button>
           </div>
-          <div class="task-list" data-field="tasks"></div>
-        </div>
+          <div data-field="scheduleBody">
+            <div class="task-filters" data-field="taskFilters"></div>
+            <div class="task-list" data-field="tasks"></div>
+          </div>
+        </section>
+        <section class="work-items-panel collapsible-panel" aria-labelledby="work-items-title">
+          <div class="work-items-heading">
+            <div>
+              <h3 id="work-items-title">Atividades do projeto</h3>
+              <p>Acompanhe requisitos, definições técnicas e bugs de teste.</p>
+            </div>
+            <div class="work-items-actions">
+              <div class="view-switch" data-field="workItemViewSwitch" aria-label="Visualização das atividades"></div>
+              <button type="button" data-action="add-kanban-column" hidden>Nova lista</button>
+              <button type="button" data-action="add-work-item">Nova atividade</button>
+              <button type="button" class="collapse-button" data-action="toggle-work-items" aria-expanded="true">Recolher</button>
+            </div>
+          </div>
+          <div data-field="workItemsBody">
+            <div class="work-item-summary" data-field="workItemSummary"></div>
+            <div class="work-item-filters" data-field="workItemFilters"></div>
+            <div class="work-item-list" data-field="workItems"></div>
+          </div>
+        </section>
       </article>
     </template>
 
@@ -227,6 +252,14 @@
               <li>Abra a evolutiva e clique em Gerar status report.</li>
               <li>Revise o texto gerado e copie para enviar por e-mail.</li>
               <li>Use Informações para registrar observações internas da evolutiva.</li>
+            </ol>
+          </section>
+          <section>
+            <h3>Atividades do projeto</h3>
+            <ol>
+              <li>Abra uma evolutiva e use Nova atividade para registrar uma Análise de Requisitos.</li>
+              <li>Cadastre a Definição Técnica vinculada à AR correspondente.</li>
+              <li>Durante os testes, registre bugs vinculados à Definição Técnica e atualize seus status até o fechamento.</li>
             </ol>
           </section>
         </div>
@@ -317,6 +350,47 @@
       </div>
     </div>
 
-    <script src="__BASE_PATH__/projects/app.js?v=26"></script>
+    <div id="workItemModal" class="modal" hidden>
+      <div class="modal-panel work-item-modal" role="dialog" aria-modal="true" aria-labelledby="workItemModalTitle">
+        <div class="modal-header">
+          <h2 id="workItemModalTitle">Nova atividade</h2>
+          <button id="closeWorkItemButton" type="button" title="Fechar">Fechar</button>
+        </div>
+        <form id="workItemForm" class="modal-form">
+          <div class="work-item-form-grid">
+            <label>
+              Tipo
+              <select id="workItemType" required>
+                <option value="requirement">Análise de Requisitos</option>
+                <option value="technical-definition">Definição Técnica</option>
+                <option value="bug">Bug</option>
+              </select>
+            </label>
+            <label>
+              Status
+              <select id="workItemStatus" required></select>
+            </label>
+            <label id="workItemParentField" class="wide-field" hidden>
+              <span id="workItemParentLabel">Vincular a</span>
+              <select id="workItemParent"></select>
+            </label>
+            <label class="wide-field">
+              Título
+              <input id="workItemTitle" autocomplete="off" required />
+            </label>
+            <label class="wide-field">
+              Descrição
+              <textarea id="workItemDescription" rows="5" placeholder="Contexto, critérios de aceite ou passos para reproduzir"></textarea>
+            </label>
+          </div>
+          <div class="modal-actions work-item-modal-actions">
+            <button id="deleteWorkItemButton" class="danger-action" type="button" hidden>Excluir</button>
+            <button type="submit">Salvar atividade</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script src="__BASE_PATH__/projects/app.js?v=33"></script>
   </body>
 </html>

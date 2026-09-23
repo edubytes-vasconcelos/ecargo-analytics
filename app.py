@@ -809,6 +809,106 @@ def write_projects(projects: list[dict]) -> None:
     PROJECTS_FILE.write_text(json.dumps(projects, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
+WORK_ITEM_TYPES = {"requirement", "technical-definition", "bug"}
+WORK_ITEM_STATUSES = {
+    "requirement": {"backlog", "analysis", "approved", "blocked"},
+    "technical-definition": {"backlog", "definition", "ready-for-test", "testing", "done", "blocked"},
+    "bug": {"open", "fixing", "ready-for-retest", "blocked", "closed"},
+}
+
+
+def _find_project(projects: list[dict], project_id: str) -> dict | None:
+    return next((project for project in projects if str(project.get("id")) == project_id), None)
+
+
+def _work_item_from_payload(project: dict, payload: dict, item_id: str | None = None) -> dict:
+    item_type = str(payload.get("type", "")).strip()
+    title = str(payload.get("title", "")).strip()
+    status = str(payload.get("status", "")).strip()
+    description = str(payload.get("description", "")).strip()
+    parent_id = str(payload.get("parentId", "")).strip() or None
+    if item_type not in WORK_ITEM_TYPES:
+        raise ValueError("Tipo de atividade inválido.")
+    if not title:
+        raise ValueError("Informe o título da atividade.")
+    custom_statuses = {str(column.get("id")) for column in (project.get("workItemColumns") or [])}
+    if status not in WORK_ITEM_STATUSES[item_type] and status not in custom_statuses:
+        raise ValueError("Status inválido para o tipo de atividade.")
+
+    items = project.get("workItems") or []
+    parent = next((item for item in items if str(item.get("id")) == parent_id), None)
+    expected_parent = {"technical-definition": "requirement", "bug": "technical-definition"}.get(item_type)
+    if expected_parent and (not parent or parent.get("type") != expected_parent):
+        label = "Análise de Requisitos" if item_type == "technical-definition" else "Definição Técnica"
+        raise ValueError(f"Selecione uma {label} válida para vincular a atividade.")
+    if not expected_parent:
+        parent_id = None
+
+    now = datetime.now().isoformat(timespec="seconds")
+    archived = bool(payload.get("archived", False))
+    return {
+        "id": item_id or uuid.uuid4().hex,
+        "type": item_type,
+        "title": title,
+        "status": status,
+        "description": description,
+        "parentId": parent_id,
+        "archived": archived,
+        "archivedAt": (str(payload.get("archivedAt") or now) if archived else None),
+        "createdAt": now,
+        "updatedAt": now,
+    }
+
+
+def _set_work_item_branch_archived(project: dict, item_id: str, archived: bool) -> None:
+    items = project.get("workItems") or []
+    branch = {str(item_id)}
+    changed = True
+    while changed:
+        before = len(branch)
+        branch.update(str(item.get("id")) for item in items if str(item.get("parentId")) in branch)
+        changed = len(branch) != before
+    now = datetime.now().isoformat(timespec="seconds")
+    for item in items:
+        if str(item.get("id")) not in branch:
+            continue
+        item["archived"] = archived
+        item["archivedAt"] = now if archived else None
+        item["updatedAt"] = now
+
+
+def _sync_definition_status(project: dict, definition_id: str | None) -> None:
+    if not definition_id:
+        return
+    items = project.get("workItems") or []
+    definition = next(
+        (item for item in items if str(item.get("id")) == str(definition_id) and item.get("type") == "technical-definition"),
+        None,
+    )
+    if definition is None:
+        return
+    bugs = [
+        item for item in items
+        if item.get("type") == "bug"
+        and not item.get("archived")
+        and str(item.get("parentId")) == str(definition_id)
+    ]
+    if not bugs:
+        if definition.get("status") in {"blocked", "testing"}:
+            definition["status"] = "ready-for-test"
+            definition["updatedAt"] = datetime.now().isoformat(timespec="seconds")
+        return
+    active_statuses = {str(bug.get("status")) for bug in bugs if bug.get("status") != "closed"}
+    if active_statuses & {"open", "fixing", "blocked"}:
+        status = "blocked"
+    elif "ready-for-retest" in active_statuses:
+        status = "testing"
+    else:
+        status = "ready-for-test"
+    definition["status"] = status
+    definition["updatedAt"] = datetime.now().isoformat(timespec="seconds")
+
+
 def read_project_settings() -> dict:
     PROJECT_SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
     if not PROJECT_SETTINGS_FILE.exists():
@@ -1477,8 +1577,18 @@ def inspect_project(project: dict, settings: dict | None = None) -> dict:
 
 def projects_payload() -> list[dict]:
     settings = read_project_settings()
+    projects = read_projects()
+    changed = False
+    for project in projects:
+        definitions = [item for item in (project.get("workItems") or []) if item.get("type") == "technical-definition"]
+        for definition in definitions:
+            previous = definition.get("status")
+            _sync_definition_status(project, str(definition.get("id")))
+            changed = changed or definition.get("status") != previous
+    if changed:
+        write_projects(projects)
     enriched = []
-    for project in read_projects():
+    for project in projects:
         try:
             enriched.append({**project, "dashboard": inspect_project(project, settings)})
         except Exception as exc:
@@ -1581,6 +1691,54 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = self._route_path()
+        column_match = re.fullmatch(r"/api/projects/([^/]+)/work-item-columns", path)
+        if column_match:
+            try:
+                length = int(self.headers.get("Content-Length", "0") or "0")
+                payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+                title = str(payload.get("title", "")).strip()
+                if not title:
+                    self._send_json({"error": "Informe o nome da lista."}, 400)
+                    return
+                projects = read_projects()
+                project = _find_project(projects, column_match.group(1))
+                if project is None:
+                    self._send_json({"error": "Projeto não encontrado."}, 404)
+                    return
+                columns = project.setdefault("workItemColumns", [])
+                if any(str(column.get("title", "")).casefold() == title.casefold() for column in columns):
+                    self._send_json({"error": "Já existe uma lista com esse nome."}, 400)
+                    return
+                column = {"id": f"custom-{uuid.uuid4().hex}", "title": title, "createdAt": datetime.now().isoformat(timespec="seconds")}
+                columns.append(column)
+                project["updatedAt"] = column["createdAt"]
+                write_projects(projects)
+                self._send_json(column, 201)
+            except (ValueError, json.JSONDecodeError) as exc:
+                self._send_json({"error": str(exc)}, 400)
+            return
+
+        work_item_match = re.fullmatch(r"/api/projects/([^/]+)/work-items", path)
+        if work_item_match:
+            try:
+                length = int(self.headers.get("Content-Length", "0") or "0")
+                payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+                projects = read_projects()
+                project = _find_project(projects, work_item_match.group(1))
+                if project is None:
+                    self._send_json({"error": "Projeto não encontrado."}, 404)
+                    return
+                item = _work_item_from_payload(project, payload)
+                project.setdefault("workItems", []).append(item)
+                if item["type"] == "bug":
+                    _sync_definition_status(project, item.get("parentId"))
+                project["updatedAt"] = item["updatedAt"]
+                write_projects(projects)
+                self._send_json(item, 201)
+            except (ValueError, json.JSONDecodeError) as exc:
+                self._send_json({"error": str(exc)}, 400)
+            return
+
         if path.startswith("/api/projects/") and path.endswith("/upload") and path.count("/") == 4:
             project_id = path.split("/")[-2]
             try:
@@ -1758,6 +1916,37 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_PATCH(self) -> None:
         path = self._route_path()
+        work_item_match = re.fullmatch(r"/api/projects/([^/]+)/work-items/([^/]+)", path)
+        if work_item_match:
+            try:
+                length = int(self.headers.get("Content-Length", "0") or "0")
+                payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+                projects = read_projects()
+                project = _find_project(projects, work_item_match.group(1))
+                if project is None:
+                    self._send_json({"error": "Projeto não encontrado."}, 404)
+                    return
+                items = project.get("workItems") or []
+                current = next((item for item in items if str(item.get("id")) == work_item_match.group(2)), None)
+                if current is None:
+                    self._send_json({"error": "Atividade não encontrada."}, 404)
+                    return
+                updated = _work_item_from_payload(project, {**current, **payload}, str(current.get("id")))
+                updated["createdAt"] = current.get("createdAt") or updated["createdAt"]
+                items[items.index(current)] = updated
+                project["workItems"] = items
+                if "archived" in payload:
+                    _set_work_item_branch_archived(project, str(updated.get("id")), bool(payload.get("archived")))
+                if updated["type"] == "bug":
+                    _sync_definition_status(project, current.get("parentId"))
+                    _sync_definition_status(project, updated.get("parentId"))
+                project["updatedAt"] = updated["updatedAt"]
+                write_projects(projects)
+                self._send_json(updated)
+            except (ValueError, json.JSONDecodeError) as exc:
+                self._send_json({"error": str(exc)}, 400)
+            return
+
         if not path.startswith("/api/projects/"):
             self.send_error(404)
             return
@@ -1798,6 +1987,30 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json(_delete_project_plan_image())
             except Exception as exc:
                 self._send_json({"error": str(exc)}, 400)
+            return
+        work_item_match = re.fullmatch(r"/api/projects/([^/]+)/work-items/([^/]+)", path)
+        if work_item_match:
+            projects = read_projects()
+            project = _find_project(projects, work_item_match.group(1))
+            if project is None:
+                self._send_json({"error": "Projeto não encontrado."}, 404)
+                return
+            item_id = work_item_match.group(2)
+            items = project.get("workItems") or []
+            removed = next((item for item in items if str(item.get("id")) == item_id), None)
+            descendants = {item_id}
+            changed = True
+            while changed:
+                before = len(descendants)
+                descendants.update(str(item.get("id")) for item in items if str(item.get("parentId")) in descendants)
+                changed = len(descendants) != before
+            project["workItems"] = [item for item in items if str(item.get("id")) not in descendants]
+            if removed and removed.get("type") == "bug":
+                _sync_definition_status(project, removed.get("parentId"))
+            project["updatedAt"] = datetime.now().isoformat(timespec="seconds")
+            write_projects(projects)
+            self.send_response(204)
+            self.end_headers()
             return
         if not path.startswith("/api/projects/"):
             self.send_error(404)
