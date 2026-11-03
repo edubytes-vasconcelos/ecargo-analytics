@@ -111,7 +111,7 @@ function renderCollaboration(item) {
   const comments = item?.comments || [];
   document.querySelector("#commentList").innerHTML = comments.map((comment) => {
     const parent = comments.find((entry) => entry.id === comment.replyTo);
-    return `<article class="card-comment ${comment.authorId === authState.user?.id ? "own-comment" : ""}" data-comment-id="${escapeHtml(comment.id)}"><header><strong>${escapeHtml(comment.author)}</strong><small>${escapeHtml(comment.authorEmail || "")} · ${escapeHtml(formatDate(comment.createdAt, true))}</small></header>${parent ? `<blockquote>Em resposta a ${escapeHtml(parent.author)}: ${escapeHtml(parent.text.slice(0, 180))}</blockquote>` : ""}<p>${escapeHtml(comment.text)}</p>${comment.mentions?.length ? `<p class="hint">${comment.mentions.map((user) => `@${escapeHtml(user.name)}`).join(" ")}</p>` : ""}<button type="button" data-reply>Responder</button> <button type="button" data-convert>Transformar em atividade</button></article>`;
+    return `<article class="card-comment ${comment.authorId === authState.user?.id ? "own-comment" : ""}" data-comment-id="${escapeHtml(comment.id)}"><header><strong>${escapeHtml(comment.author)}</strong><small>${escapeHtml(comment.authorEmail || "")} · ${escapeHtml(formatDate(comment.createdAt, true))}</small></header>${parent ? `<blockquote>Em resposta a ${escapeHtml(parent.author)}: ${escapeHtml(parent.text.slice(0, 180))}</blockquote>` : ""}<p>${escapeHtml(comment.text)}</p>${comment.mentions?.length ? `<p class="hint">Notificados: ${comment.mentions.map((user) => escapeHtml(user.name)).join(", ")}</p>` : ""}<button type="button" data-reply>Responder</button> <button type="button" data-convert>Transformar em atividade</button></article>`;
   }).join("") || '<div class="conversation-empty"><span aria-hidden="true">◌</span><strong>A conversa começa aqui</strong><p>Registre decisões, tire dúvidas e mantenha a equipe no mesmo contexto.</p></div>';
   document.querySelectorAll("[data-reply]").forEach((button) => button.addEventListener("click", () => {
     commentReplyTo = button.closest("[data-comment-id]").dataset.commentId;
@@ -169,11 +169,11 @@ document.querySelector("#sendComment").addEventListener("click", () => runCollab
   const text = document.querySelector("#commentText").value.trim();
   if (!text) throw new Error("Informe a mensagem.");
   if (!authState.user) throw new Error("A identificação dos usuários precisa ser configurada para enviar mensagens.");
-  const mentionIds = [...document.querySelector("#commentMentions").selectedOptions].map((option) => option.value);
+  const mentionIds = getCommentMentionIds();
   await requireCollaborationResponse(await fetch(`${appBasePath}/api/projects/${workItemProjectId}/work-items/${editingWorkItemId}/comments`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, mentionIds, replyTo: commentReplyTo }) }));
-  document.querySelector("#commentMentions").selectedIndex = -1;
   commentReplyTo = null;
   document.querySelector("#commentText").value = "";
+  resetCommentMentions();
   await loadProjects();
   renderCollaboration(collaborationItem());
   document.querySelector("#collaborationStatus").textContent = "Mensagem enviada.";

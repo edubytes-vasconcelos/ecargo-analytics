@@ -37,7 +37,8 @@
     event.preventDefault();
     event.stopImmediatePropagation();
     const column = event.target.closest('.kanban-column')?.querySelector('.kanban-column-body');
-    pan = { board, column, pointerId:event.pointerId, x:event.clientX, y:event.clientY, left:board.scrollLeft, top:column?.scrollTop || 0, pageTop:window.scrollY };
+    const vertical = column && column.scrollHeight > column.clientHeight + 1 ? column : board;
+    pan = { board, vertical, pointerId:event.pointerId, x:event.clientX, y:event.clientY, left:board.scrollLeft, top:vertical.scrollTop };
     board.setPointerCapture(event.pointerId);
     document.body.classList.add('kanban-is-panning');
   }, true);
@@ -47,8 +48,7 @@
     event.preventDefault();
     event.stopImmediatePropagation();
     pan.board.scrollLeft = pan.left - (event.clientX - pan.x);
-    if (pan.column) pan.column.scrollTop = pan.top - (event.clientY - pan.y);
-    else window.scrollTo(window.scrollX, pan.pageTop - (event.clientY - pan.y));
+    pan.vertical.scrollTop = pan.top - (event.clientY - pan.y);
   }, {capture:true, passive:false});
   document.addEventListener('pointerup', event => {
     if (pan && event.pointerId === pan.pointerId) {
@@ -222,7 +222,56 @@ function decorateWorkItemToolbar(root, project, state) {
     replacement?.focus();
   },200); });
   owner.addEventListener('change', () => { state.workItemOwner = owner.value; renderProjectDetail(project); });
+  if (state.workItemView === 'kanban') compactKanbanToolbar(root, state);
 }
+function compactKanbanToolbar(root, state) {
+  const header = root.querySelector('.card-header');
+  const actions = root.querySelector('.work-items-actions');
+  const projectActions = root.querySelector('.kanban-project-actions');
+  header.insertBefore(actions, projectActions);
+  const body = root.querySelector('[data-field=workItemsBody]');
+  body.classList.add('kanban-canvas-layout');
+  const article = body.closest('article');
+  const panel = document.createElement('aside');
+  panel.id = 'kanbanSidepanel'; panel.className = 'kanban-sidepanel';
+  panel.setAttribute('aria-labelledby','kanbanSidepanelTitle');
+  panel.innerHTML = '<div class="kanban-sidepanel-heading"><h3 id="kanbanSidepanelTitle">Painel do projeto</h3><button type="button" class="secondary-action" aria-label="Fechar painel lateral">✕</button></div><h4>Resumo e atenção</h4>';
+  panel.append(root.querySelector('[data-field=workItemSummary]'));
+  const actionTitle = document.createElement('h4'); actionTitle.textContent = 'Ações do projeto'; panel.append(actionTitle);
+  const panelActions = document.createElement('div'); panelActions.className = 'kanban-sidepanel-actions';
+  const edit = root.querySelector('[data-action=edit]');
+  if (edit) { edit.classList.remove('title-edit-button'); edit.textContent = 'Editar projeto'; edit.setAttribute('aria-label','Editar projeto'); panelActions.append(edit); }
+  const menu = projectActions.querySelector('.kanban-project-menu');
+  if (menu) { [...menu.lastElementChild.children].forEach(button => panelActions.append(button)); menu.remove(); }
+  const back = projectActions.querySelector('[data-action=back]');
+  if (back) { back.textContent = 'Todos os projetos'; panelActions.prepend(back); }
+  panel.append(panelActions);
+  const toggle = document.createElement('button'); toggle.type = 'button'; toggle.className = 'secondary-action kanban-sidebar-toggle';
+  toggle.textContent = state.attentionFilter ? '☰ Painel · filtro ativo' : '☰ Painel';
+  toggle.setAttribute('aria-controls',panel.id);
+  toggle.classList.toggle('has-filter', Boolean(state.attentionFilter));
+  projectActions.append(toggle);
+  const backdrop = document.createElement('button'); backdrop.type = 'button'; backdrop.className = 'kanban-sidebar-backdrop'; backdrop.tabIndex = -1; backdrop.setAttribute('aria-label','Fechar painel lateral');
+  function setOpen(open, focus = false) {
+    state.kanbanSidebarOpen = open;
+    panel.hidden = !open;
+    article.classList.toggle('kanban-sidebar-open',open);
+    toggle.setAttribute('aria-expanded',String(open));
+    toggle.setAttribute('aria-label',open ? 'Recolher painel do projeto' : 'Abrir painel do projeto');
+    requestAnimationFrame(syncKanbanViewport);
+    if (focus) (open ? panel.querySelector('button') : toggle).focus();
+  }
+  toggle.addEventListener('click',()=>setOpen(!state.kanbanSidebarOpen,true));
+  panel.querySelector('button').addEventListener('click',()=>setOpen(false,true));
+  backdrop.addEventListener('click',()=>setOpen(false,true));
+  panel.addEventListener('keydown',event=>{if(event.key==='Escape'){event.preventDefault();event.stopPropagation();setOpen(false,true);}});
+  const toolbar = document.createElement('div'); toolbar.className = 'kanban-toolbar';
+  const tools = root.querySelector('.activity-search-tools'); tools.querySelector('input').setAttribute('aria-label','Buscar atividades');
+  toolbar.append(root.querySelector('[data-field=workItemFilters]'),tools);
+  body.prepend(panel,toolbar); body.append(backdrop);
+  setOpen(Boolean(state.kanbanSidebarOpen));
+}
+
 function normalizedActivityText(value) { return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('pt-BR'); }
 function matchesWorkspaceSearch(item,state) {
   return (!state.workItemOwner || item.assignee === state.workItemOwner) && (!state.workItemQuery || normalizedActivityText(`${item.title} ${item.description || ''} ${item.nextAction || ''}`).includes(normalizedActivityText(state.workItemQuery)));
@@ -231,24 +280,9 @@ function matchesWorkspaceSearch(item,state) {
 syncWorkspaceModal();
 if (projectsCache.length && workItemModal.hidden) renderCurrentView();
 
-function populateWorkspaceMentions() {
-  const list = document.querySelector('#mentionOptions');
-  list.replaceChildren();
-  for (const option of document.querySelector('#commentMentions').options) {
-    const label = document.createElement('label');
-    const input = document.createElement('input'); input.type = 'checkbox'; input.dataset.mentionUserId = option.value; input.checked = option.selected;
-    const text = document.createElement('span'); text.textContent = option.textContent;
-    input.addEventListener('change', () => { option.selected = input.checked; syncWorkspaceMentions(); });
-    label.append(input,text); list.appendChild(label);
-  }
-  document.querySelector('.mentions-picker').open = false;
-  syncWorkspaceMentions();
-}
-function syncWorkspaceMentions() {
-  const selected = new Set([...document.querySelector('#commentMentions').selectedOptions].map(option => option.value));
-  document.querySelectorAll('[data-mention-user-id]').forEach(input => { input.checked = selected.has(input.dataset.mentionUserId); });
-  document.querySelector('#mentionSelectionCount').textContent = selected.size ? `${selected.size} selecionada${selected.size === 1 ? '' : 's'}` : 'Opcional';
-}
+function populateWorkspaceMentions() { window.resetCommentMentions?.(); }
+function syncWorkspaceMentions() { window.syncCommentMentions?.(); }
+
 document.querySelector('#jumpToComposer').addEventListener('click', () => { document.querySelector('#commentText').focus(); document.querySelector('.comment-composer').scrollIntoView({ block: 'nearest' }); });
 function updateBlockedReasonVisibility() {
   const reason = document.querySelector('#workItemBlockedReason');

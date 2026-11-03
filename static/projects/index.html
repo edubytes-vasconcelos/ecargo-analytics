@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Portal E-Cargo | Evolutivas</title>
     <link rel="stylesheet" href="__BASE_PATH__/projects/styles.css?v=35" />
-    <link rel="stylesheet" href="__BASE_PATH__/projects/workspace.css?v=5" />
+    <link rel="stylesheet" href="__BASE_PATH__/projects/workspace.css?v=6" />
   </head>
   <body>
     <header class="topbar">
@@ -413,8 +413,8 @@
           <div class="conversation-heading"><h3>Conversa</h3><button id="jumpToComposer" type="button">Escrever mensagem</button></div>
           <div id="commentList" aria-live="polite"></div>
           <p id="commentReplyLabel"></p>
-          <div class="comment-composer"><p id="commentAuthor"></p><label>Mensagem<textarea id="commentText" rows="3" maxlength="10000" placeholder="Registre uma dúvida, decisão ou atualização"></textarea></label>
-          <details class="mentions-picker"><summary>Notificar pessoas <span id="mentionSelectionCount">Opcional</span></summary><div id="mentionOptions"></div><select id="commentMentions" multiple aria-label="Pessoas mencionadas" hidden></select></details>
+          <div class="comment-composer"><p id="commentAuthor"></p><label>Mensagem<div class="mention-editor"><textarea id="commentText" aria-label="Mensagem" rows="3" maxlength="10000" placeholder="Escreva uma mensagem. Use @ para mencionar alguém." aria-autocomplete="list" aria-controls="mentionSuggestions" aria-describedby="mentionHelp mentionRecipients"></textarea><div id="mentionSuggestions" class="mention-suggestions" role="listbox" aria-label="Pessoas para mencionar" hidden></div></div></label>
+          <small id="mentionHelp" class="hint">Digite @ e selecione uma pessoa para notificá-la.</small><small id="mentionRecipients" class="mention-recipients" aria-live="polite" hidden></small>
           <div class="collaboration-compose"><button id="sendComment" type="button">Enviar mensagem</button><button id="cancelReply" type="button" hidden>Cancelar resposta</button></div>
           </div>
           </section>
@@ -440,8 +440,9 @@
 
     <div id="notificationModal" class="modal" hidden><div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="notificationTitle"><div class="modal-header"><h2 id="notificationTitle">Notificações</h2><button id="closeNotifications" type="button">Fechar</button></div><div id="notificationList"></div></div></div>
     <script src="__BASE_PATH__/projects/auth.js?v=4"></script>
-    <script src="__BASE_PATH__/projects/management.js?v=6"></script>
-    <script src="__BASE_PATH__/projects/app.js?v=49"></script>
-    <script src="__BASE_PATH__/projects/workspace-ui.js?v=4"></script>
+    <script src="__BASE_PATH__/projects/management.js?v=7"></script>
+    <script src="__BASE_PATH__/projects/app.js?v=50"></script>
+    <script src="__BASE_PATH__/projects/mentions.js?v=1"></script>
+    <script src="__BASE_PATH__/projects/workspace-ui.js?v=5"></script>
   </body>
 </html>

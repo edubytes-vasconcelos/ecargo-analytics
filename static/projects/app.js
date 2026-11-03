@@ -1533,6 +1533,8 @@ function kanbanColumnOrder(project) {
 function syncKanbanViewport() {
   const board = document.querySelector('.kanban-workspace .work-item-kanban');
   if (board) board.style.height = `${Math.max(260, window.innerHeight - board.getBoundingClientRect().top - 20)}px`;
+  const panel = document.querySelector('.kanban-sidepanel:not([hidden])');
+  if (panel) panel.style.maxHeight = `${Math.max(260,window.innerHeight-panel.getBoundingClientRect().top-20)}px`;
 }
 window.addEventListener('resize', syncKanbanViewport);
 
@@ -1558,8 +1560,8 @@ function renderWorkItemKanban(container, visible, allItems, project, state) {
     const owner = state.kanbanOwners[column.id] || '';
     const cards = columnItems.filter(item => !owner || kanbanAssigneeKey(item) === owner);
     return `<section class="kanban-column stage-${column.id}" data-kanban-stage="${escapeHtml(column.id)}">
-      <div class="kanban-column-head" draggable="true"><h4>${escapeHtml(column.title)}</h4><span title="Atividades visíveis nesta lista">${owner ? `${cards.length}/${columnItems.length}` : cards.length}</span>${column.custom ? kanbanColumnMenuHtml(column) : ""}</div>
-      <label class="kanban-owner-filter ${owner ? 'is-filtered' : ''}"><span>Responsável</span><select data-column-owner="${escapeHtml(column.id)}" aria-label="Responsável na lista ${escapeHtml(column.title)}"><option value="">Todos</option>${ownerOptions.map(([key,name]) => `<option value="${escapeHtml(key)}" ${key === owner ? 'selected' : ''}>${escapeHtml(name)}</option>`).join('')}</select></label>
+      <div class="kanban-column-toolbar"><div class="kanban-column-head" draggable="true"><h4>${escapeHtml(column.title)}</h4><span title="Atividades visíveis nesta lista">${owner ? `${cards.length}/${columnItems.length}` : cards.length}</span>${column.custom ? kanbanColumnMenuHtml(column) : ""}</div>
+      <label class="kanban-owner-filter ${owner ? 'is-filtered' : ''}"><span>Responsável</span><select data-column-owner="${escapeHtml(column.id)}" aria-label="Responsável na lista ${escapeHtml(column.title)}"><option value="">Todos</option>${ownerOptions.map(([key,name]) => `<option value="${escapeHtml(key)}" ${key === owner ? 'selected' : ''}>${escapeHtml(name)}</option>`).join('')}</select></label></div>
       <div class="kanban-column-body">${cards.map((item) => {
         const parent = allItems.find((candidate) => candidate.id === item.parentId);
         const childCount = allItems.filter((candidate) => candidate.parentId === item.id).length;
@@ -1599,11 +1601,13 @@ function renderWorkItemKanban(container, visible, allItems, project, state) {
     : "");
   container.querySelectorAll('[data-column-owner]').forEach(select => select.addEventListener('change', () => {
     const left = container.scrollLeft;
+    const top = container.scrollTop;
     const stage = select.dataset.columnOwner;
     const positions = new Map([...container.querySelectorAll('.kanban-column')].map(column => [column.dataset.kanbanStage, column.querySelector('.kanban-column-body').scrollTop]));
     state.kanbanOwners[stage] = select.value;
     renderWorkItemKanban(container, visible, allItems, project, state);
     container.scrollLeft = left;
+    container.scrollTop = top;
     container.querySelectorAll('.kanban-column').forEach(column => { column.querySelector('.kanban-column-body').scrollTop = positions.get(column.dataset.kanbanStage) || 0; });
     [...container.querySelectorAll('[data-column-owner]')].find(input => input.dataset.columnOwner === stage)?.focus({preventScroll:true});
   }));
@@ -1876,7 +1880,7 @@ function openWorkItemEditor(project, item = null, stage = null, preferredType = 
   document.querySelector("#commentText").value = "";
   document.querySelector("#sendComment").disabled = !authState.user || authState.user.mustChangePassword;
   document.querySelector("#commentAuthor").textContent = authState.user ? `Enviando como ${authState.user.name} (${authState.user.email})` : "Entre para enviar mensagens.";
-  document.querySelector("#commentMentions").innerHTML = authState.users.map((user) => `<option value="${escapeHtml(user.id)}">${escapeHtml(user.name)} (${escapeHtml(user.email)})</option>`).join("");
+  window.resetCommentMentions?.();
   document.querySelector("#workItemCollaboration").hidden = !item;
   document.querySelector("#collaborationSaveHint").hidden = Boolean(item);
   renderCollaboration(item);
