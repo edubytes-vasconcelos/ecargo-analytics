@@ -63,7 +63,8 @@ def project_store_transaction(request_handler):
             path = handler._route_path()
             handler.project_identity = {"id": None, "name": "Não identificado", "email": ""}
             protected = path.startswith(("/api/projects", "/api/project-settings", "/api/work-item-images"))
-            if handler.command in {"POST", "PATCH", "DELETE"} and protected:
+            public_completion = handler.command == "PATCH" and re.fullmatch(r"/api/projects/[^/]+/completion", path)
+            if handler.command in {"POST", "PATCH", "DELETE"} and protected and not public_completion:
                 identity = project_auth.require_write(handler, DATA_DIR, admin=path.startswith("/api/project-settings"))
                 if identity is None:
                     return
@@ -2156,6 +2157,35 @@ class Handler(BaseHTTPRequestHandler):
     @project_store_transaction
     def do_PATCH(self) -> None:
         path = self._route_path()
+        completion_match = re.fullmatch(r"/api/projects/([^/]+)/completion", path)
+        if completion_match:
+            try:
+                length = int(self.headers.get("Content-Length", "0") or "0")
+                payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+                completed = payload.get("completed")
+                if not isinstance(completed, bool) or set(payload) != {"completed"}:
+                    self._send_json({"error": "Informe apenas o estado de conclusão como verdadeiro ou falso."}, 400)
+                    return
+                projects = read_projects()
+                project = _find_project(projects, completion_match.group(1))
+                if project is None:
+                    self._send_json({"error": "Projeto não encontrado."}, 404)
+                    return
+                if project.get("type") == "study":
+                    self._send_json({"error": "A conclusão está disponível apenas para evolutivas."}, 400)
+                    return
+                project["completed"] = completed
+                if completed:
+                    project["completedAt"] = datetime.now().isoformat(timespec="seconds")
+                else:
+                    project.pop("completedAt", None)
+                project["updatedAt"] = datetime.now().isoformat(timespec="seconds")
+                write_projects(projects)
+                self._send_json({"id": project["id"], "completed": completed, "completedAt": project.get("completedAt")})
+            except (ValueError, json.JSONDecodeError) as exc:
+                self._send_json({"error": str(exc)}, 400)
+            return
+
         order_match = re.fullmatch(r"/api/projects/([^/]+)/work-item-column-order", path)
         if order_match:
             try:
@@ -2268,18 +2298,6 @@ class Handler(BaseHTTPRequestHandler):
                     project["name"] = title
                 if project.get("type") == "study" and "description" in payload:
                     project["description"] = str(payload.get("description", "")).strip()
-                if "completed" in payload:
-                    if not isinstance(payload["completed"], bool):
-                        self._send_json({"error": "O estado de conclusão deve ser verdadeiro ou falso."}, 400)
-                        return
-                    if project.get("type") == "study":
-                        self._send_json({"error": "A conclusão neste painel está disponível apenas para evolutivas."}, 400)
-                        return
-                    project["completed"] = payload["completed"]
-                    if payload["completed"]:
-                        project["completedAt"] = datetime.now().isoformat(timespec="seconds")
-                    else:
-                        project.pop("completedAt", None)
                 project["updatedAt"] = datetime.now().isoformat(timespec="seconds")
                 updated = project
                 break

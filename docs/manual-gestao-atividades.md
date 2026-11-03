@@ -15,7 +15,7 @@ Este guia mostra como registrar e acompanhar atividades de um projeto no painel,
 ## 2. Acompanhar evolutivas no dashboard
 
 1. No dashboard, use **Todas**, **Em andamento** ou **Concluídas** para consultar as evolutivas por situação. Os números ao lado dos filtros mostram quantas evolutivas há em cada grupo.
-2. Em um card, selecione **Concluir projeto** quando a evolutiva estiver finalizada. A conclusão fica salva no projeto e aparece como **Concluída**.
+2. Em um card, selecione **Concluir projeto** quando a evolutiva estiver finalizada. Essa ação e a opção **Reabrir** não exigem login. A conclusão fica salva no projeto e aparece como **Concluída**.
 3. Para retomar uma evolutiva, selecione **Reabrir**. Ela volta para **Em andamento**.
 4. A conclusão da evolutiva é independente da etapa dos cards de atividade: concluir o projeto não fecha nem move suas atividades automaticamente.
 

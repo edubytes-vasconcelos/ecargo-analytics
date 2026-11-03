@@ -1094,7 +1094,7 @@ function bindProjectCompletion(card, project) {
     const button = event.currentTarget;
     button.disabled = true;
     try {
-      const response = await fetch(`${appBasePath}/api/projects/${project.id}`, {
+      const response = await fetch(`${appBasePath}/api/projects/${project.id}/completion`, {
         method: "PATCH", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ completed: !project.completed }),
       });
