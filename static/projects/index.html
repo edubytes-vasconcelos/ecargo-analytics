@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Portal E-Cargo | Evolutivas</title>
     <link rel="stylesheet" href="__BASE_PATH__/projects/styles.css?v=35" />
-    <link rel="stylesheet" href="__BASE_PATH__/projects/workspace.css?v=3" />
+    <link rel="stylesheet" href="__BASE_PATH__/projects/workspace.css?v=4" />
   </head>
   <body>
     <header class="topbar">
@@ -393,7 +393,9 @@
               Descrição
               <textarea id="workItemDescription" rows="5" data-markdown="true" placeholder="Contexto, critérios de aceite ou passos para reproduzir"></textarea>
             </label>
+            <label class="wide-field manual-block"><input type="checkbox" id="workItemBlocked" /> Bloqueada por outro motivo</label>
             <label class="wide-field">Motivo do bloqueio<input id="workItemBlockedReason" /></label>
+            <div id="workItemPendingBugs" class="wide-field pending-bugs" hidden></div>
             <label class="wide-field">Critérios de conclusão<textarea id="workItemAcceptanceCriteria" rows="3"></textarea></label>
             <section class="wide-field collaboration-section" aria-label="Checklist">
               <h3>Checklist</h3>
@@ -438,8 +440,8 @@
 
     <div id="notificationModal" class="modal" hidden><div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="notificationTitle"><div class="modal-header"><h2 id="notificationTitle">Notificações</h2><button id="closeNotifications" type="button">Fechar</button></div><div id="notificationList"></div></div></div>
     <script src="__BASE_PATH__/projects/auth.js?v=4"></script>
-    <script src="__BASE_PATH__/projects/management.js?v=5"></script>
-    <script src="__BASE_PATH__/projects/app.js?v=48"></script>
-    <script src="__BASE_PATH__/projects/workspace-ui.js?v=2"></script>
+    <script src="__BASE_PATH__/projects/management.js?v=6"></script>
+    <script src="__BASE_PATH__/projects/app.js?v=49"></script>
+    <script src="__BASE_PATH__/projects/workspace-ui.js?v=3"></script>
   </body>
 </html>

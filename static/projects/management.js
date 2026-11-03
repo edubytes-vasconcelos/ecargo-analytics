@@ -4,7 +4,7 @@ let evidenceDraft = [];
 let commentReplyTo = null;
 let collaborationBusy = false;
 const managementPriorities = { low: "Baixa", normal: "Normal", high: "Alta", urgent: "Urgente" };
-const managementFields = { title: "Título", status: "Etapa", description: "Descrição", parentId: "Vínculo", assignee: "Responsável", priority: "Prioridade", dueDate: "Prazo", nextAction: "Próxima ação", blockedReason: "Bloqueio", acceptanceCriteria: "Critérios de conclusão", checklist: "Checklist", archived: "Arquivamento" };
+const managementFields = { title: "Título", status: "Etapa", description: "Descrição", parentId: "Vínculo", assignee: "Responsável", priority: "Prioridade", dueDate: "Prazo", nextAction: "Próxima ação", blocked: "Bloqueio manual", blockedReason: "Motivo do bloqueio", acceptanceCriteria: "Critérios de conclusão", checklist: "Checklist", archived: "Arquivamento" };
 let dashboardAttentionFilter = "overdue";
 
 function renderManagementOverview(projects) {
@@ -44,7 +44,7 @@ function workItemMatchesAttention(item, filter) {
   const identity = managementIdentity().toLocaleLowerCase("pt-BR");
   const today = managementToday();
   if (filter === "overdue") return !done && Boolean(item.dueDate) && item.dueDate < today;
-  if (filter === "blocked") return !done && item.status === "blocked";
+  if (filter === "blocked") return Boolean(item.blocked || item.pendingBugs?.length);
   if (filter === "unassigned") return !done && !item.assignee?.trim();
   if (filter === "mine") return !done && Boolean(identity) && item.assigneeId?.toLocaleLowerCase("pt-BR") === identity;
   if (filter === "mentions") return Boolean(identity) && (item.comments || []).some((comment) => (comment.mentionIds || []).includes(identity));
@@ -66,7 +66,8 @@ function workItemManagementHtml(item) {
     ${item.comments?.length ? `<span>${item.comments.length} mensagens</span>` : ""}
     ${item.evidence?.length ? `<span>${item.evidence.length} evidências</span>` : ""}
     ${item.nextAction ? `<small>Próxima ação: ${escapeHtml(item.nextAction)}</small>` : ""}
-    ${item.status === "blocked" && item.blockedReason ? `<small>Bloqueio: ${escapeHtml(item.blockedReason)}</small>` : ""}
+    ${item.pendingBugs?.length ? `<span class="blocking-badge">Bloqueada · ${item.pendingBugs.length} bug${item.pendingBugs.length > 1 ? 's' : ''} pendente${item.pendingBugs.length > 1 ? 's' : ''}</span>` : ''}
+    ${item.blocked ? `<span class="blocking-badge">Bloqueada por outro motivo</span>${item.blockedReason ? `<small>Bloqueio: ${escapeHtml(item.blockedReason)}</small>` : ''}` : ''}
   </div>`;
 }
 
@@ -94,6 +95,14 @@ function collaborationItem() {
 }
 
 function renderCollaboration(item) {
+  const pending = document.querySelector('#workItemPendingBugs');
+  pending.hidden = !item?.pendingBugs?.length;
+  pending.innerHTML = item?.pendingBugs?.length ? `<strong>Bloqueada por bugs pendentes</strong><p>A atividade permanece na etapa atual. O aviso desaparece quando todos os bugs forem fechados ou arquivados.</p>${item.pendingBugs.map(bug => `<button type="button" data-open-pending-bug="${escapeHtml(bug.id)}">${escapeHtml(bug.title)}</button>`).join('')}` : '';
+  pending.querySelectorAll('[data-open-pending-bug]').forEach(button => button.addEventListener('click', () => {
+    const project = projectsCache.find(project => project.id === workItemProjectId);
+    const bug = project?.workItems.find(candidate => candidate.id === button.dataset.openPendingBug);
+    if (bug && (!editorHasUnsavedChanges() || confirm('Descartar alterações não salvas para abrir o bug?'))) openWorkItemEditor(project, bug);
+  }));
   document.querySelector("#collaborationStatus").textContent = "";
   document.querySelector("#commentReplyLabel").textContent = commentReplyTo ? "Respondendo à mensagem selecionada" : "";
   document.querySelector("#cancelReply").hidden = !commentReplyTo;
@@ -128,6 +137,7 @@ function renderCollaboration(item) {
 
 function historyValue(value, field) {
   if (field === 'priority') return managementPriorities[value] || 'Normal';
+  if (field === 'blocked') return value ? 'Sim' : 'Não';
   if (field === 'status') { const project = projectsCache.find(project => project.id === workItemProjectId); return project && value ? workItemStatusLabel(project, {type:collaborationItem()?.type || 'requirement',status:value}) : 'Não informado'; }
   if (field === 'parentId' && value) return projectsCache.find(project => project.id === workItemProjectId)?.workItems?.find(item => item.id === value)?.title || 'Atividade anterior';
   if (field === 'archived') return value ? 'Arquivada' : 'Ativa';

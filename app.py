@@ -824,7 +824,10 @@ def ensure_projects_store() -> None:
 
 def read_projects() -> list[dict]:
     ensure_projects_store()
-    return json.loads(PROJECTS_FILE.read_text(encoding="utf-8") or "[]")
+    projects = json.loads(PROJECTS_FILE.read_text(encoding="utf-8") or "[]")
+    for project in projects:
+        _normalize_legacy_blocking(project)
+    return projects
 
 
 def write_projects(projects: list[dict]) -> None:
@@ -891,7 +894,7 @@ def _work_item_from_payload(project: dict, payload: dict, item_id: str | None = 
         assignee = json.loads(row[0])["name"]
     payload = {**payload, "assignee": assignee, "assigneeId": assignee_id}
     history = list(current.get("history") or [])
-    fields = ("title", "status", "description", "parentId", "assignee", "assigneeId", "priority", "dueDate", "nextAction", "blockedReason", "acceptanceCriteria", "checklist", "archived")
+    fields = ("title", "status", "description", "parentId", "assignee", "assigneeId", "priority", "dueDate", "nextAction", "blocked", "blockedReason", "acceptanceCriteria", "checklist", "archived")
     for field in fields:
         if current and field in payload and current.get(field) != payload.get(field):
             history.append({"at": now, "field": field, "before": current.get(field), "after": payload.get(field)})
@@ -909,6 +912,7 @@ def _work_item_from_payload(project: dict, payload: dict, item_id: str | None = 
         "priority": priority,
         "dueDate": due_date,
         "nextAction": str(payload.get("nextAction") or "").strip(),
+        "blocked": bool(payload.get("blocked", False)),
         "blockedReason": str(payload.get("blockedReason") or "").strip(),
         "acceptanceCriteria": str(payload.get("acceptanceCriteria") or "").strip(),
         "checklist": [{"text": str(entry["text"]).strip(), "done": bool(entry.get("done"))} for entry in checklist],
@@ -940,7 +944,24 @@ def _set_work_item_branch_archived(project: dict, item_id: str, archived: bool) 
         item["updatedAt"] = now
 
 
-def _sync_definition_status(project: dict, definition_id: str | None) -> None:
+def _normalize_legacy_blocking(project: dict) -> None:
+    """Preserve old blocked cards as a flag and recover the last recorded stage."""
+    items = project.get("workItems") or []
+    for item in items:
+        if item.get("status") != "blocked":
+            continue
+        previous = next((entry.get("before") for entry in reversed(item.get("history") or [])
+                         if entry.get("field") == "status" and entry.get("before")
+                         and entry.get("before") != "blocked"), None)
+        allowed = WORK_ITEM_STATUSES.get(item.get("type"), set()) | {column["id"] for column in project.get("workItemColumns", [])}
+        stage = previous if previous in allowed else {"requirement": "analysis", "technical-definition": "definition", "bug": "fixing"}.get(item.get("type"), "backlog")
+        bugs = [bug for bug in items if bug.get("type") == "bug" and bug.get("parentId") == item.get("id") and not bug.get("archived") and bug.get("status") != "closed"]
+        item["blocked"] = bool(item.get("blocked") or item.get("blockedReason") or not bugs)
+        item["status"] = stage
+        item.setdefault("history", []).append({"at": datetime.now().isoformat(timespec="seconds"), "field": "status", "before": "blocked", "after": stage, "author": "Sistema — separação de bloqueio e etapa"})
+
+
+def _sync_definition_blocking(project: dict, definition_id: str | None) -> None:
     if not definition_id:
         return
     items = project.get("workItems") or []
@@ -956,20 +977,7 @@ def _sync_definition_status(project: dict, definition_id: str | None) -> None:
         and not item.get("archived")
         and str(item.get("parentId")) == str(definition_id)
     ]
-    if not bugs:
-        if definition.get("status") in {"blocked", "testing"}:
-            definition["status"] = "ready-for-test"
-            definition["updatedAt"] = datetime.now().isoformat(timespec="seconds")
-        return
-    active_statuses = {str(bug.get("status")) for bug in bugs if bug.get("status") != "closed"}
-    if active_statuses & {"open", "fixing", "blocked"}:
-        status = "blocked"
-    elif "ready-for-retest" in active_statuses:
-        status = "testing"
-    else:
-        status = "ready-for-test"
-    definition["status"] = status
-    definition["updatedAt"] = datetime.now().isoformat(timespec="seconds")
+    definition["pendingBugs"] = [{"id": bug["id"], "title": bug["title"], "status": bug["status"]} for bug in bugs if bug.get("status") != "closed"]
 
 
 def read_project_settings() -> dict:
@@ -1659,15 +1667,10 @@ def inspect_project(project: dict, settings: dict | None = None) -> dict:
 def projects_payload() -> list[dict]:
     settings = read_project_settings()
     projects = read_projects()
-    changed = False
     for project in projects:
         definitions = [item for item in (project.get("workItems") or []) if item.get("type") == "technical-definition"]
         for definition in definitions:
-            previous = definition.get("status")
-            _sync_definition_status(project, str(definition.get("id")))
-            changed = changed or definition.get("status") != previous
-    if changed:
-        write_projects(projects)
+            _sync_definition_blocking(project, str(definition.get("id")))
     enriched = []
     for project in projects:
         try:
@@ -1921,7 +1924,7 @@ class Handler(BaseHTTPRequestHandler):
                 item = _work_item_from_payload(project, payload)
                 project.setdefault("workItems", []).append(item)
                 if item["type"] == "bug":
-                    _sync_definition_status(project, item.get("parentId"))
+                    _sync_definition_blocking(project, item.get("parentId"))
                 project["updatedAt"] = item["updatedAt"]
                 write_projects(projects)
                 self._send_json(item, 201)
@@ -2195,8 +2198,8 @@ class Handler(BaseHTTPRequestHandler):
                 if "archived" in payload:
                     _set_work_item_branch_archived(project, str(updated.get("id")), bool(payload.get("archived")))
                 if updated["type"] == "bug":
-                    _sync_definition_status(project, current.get("parentId"))
-                    _sync_definition_status(project, updated.get("parentId"))
+                    _sync_definition_blocking(project, current.get("parentId"))
+                    _sync_definition_blocking(project, updated.get("parentId"))
                 project["updatedAt"] = updated["updatedAt"]
                 write_projects(projects)
                 self._send_json(updated)
@@ -2288,7 +2291,7 @@ class Handler(BaseHTTPRequestHandler):
                 changed = len(descendants) != before
             project["workItems"] = [item for item in items if str(item.get("id")) not in descendants]
             if removed and removed.get("type") == "bug":
-                _sync_definition_status(project, removed.get("parentId"))
+                _sync_definition_blocking(project, removed.get("parentId"))
             project["updatedAt"] = datetime.now().isoformat(timespec="seconds")
             write_projects(projects)
             self.send_response(204)

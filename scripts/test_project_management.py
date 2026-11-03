@@ -31,7 +31,7 @@ class Client:
         data=raw if raw is not None else json.dumps(payload or {}).encode()
         request=urllib.request.Request(self.base+path,data=None if method=='GET' else data,method=method,headers=headers)
         with self.opener.open(request,timeout=15) as response:
-            result=json.load(response)
+            result=None if response.status == 204 else json.load(response)
         if isinstance(result,dict) and result.get('csrfToken'): self.csrf=result['csrfToken']
         return result
     def login(self,email,password):
@@ -142,6 +142,61 @@ class ProjectManagementTests(unittest.TestCase):
         client.login(user['email'],CHANGED)
         with project_auth.database(app.DATA_DIR) as conn: conn.execute('UPDATE local_sessions SET expires=0 WHERE user_id=?',(user['id'],))
         self.denied(401,lambda:self.create(client))
+    def test_bugs_signal_blocking_without_moving_definition(self):
+        column = self.admin.request('/api/projects/test/work-item-columns', {'title':'Em Homol'})
+        parent = self.create()
+        definition = self.create(type='technical-definition', parentId=parent['id'], status=column['id'])
+        path = f'/api/projects/test/work-items/{definition["id"]}'
+        def current():
+            projects = self.admin.request('/api/projects', method='GET')
+            return next(item for item in projects[0]['workItems'] if item['id'] == definition['id'])
+        bug = self.create(type='bug', parentId=definition['id'], status='open')
+        bug_path = f'/api/projects/test/work-items/{bug["id"]}'
+        self.assertEqual(current()['status'], column['id'])
+        self.assertEqual([item['id'] for item in current()['pendingBugs']], [bug['id']])
+        self.admin.request(bug_path, {'status':'ready-for-retest'}, 'PATCH')
+        self.assertEqual(current()['status'], column['id'])
+        self.assertEqual(len(current()['pendingBugs']), 1)
+        self.admin.request(bug_path, {'status':'closed'}, 'PATCH')
+        self.assertEqual(current()['pendingBugs'], [])
+        self.assertEqual(current()['status'], column['id'])
+        self.admin.request(path, {'status':'done'}, 'PATCH')
+        self.admin.request(bug_path, {'status':'fixing'}, 'PATCH')
+        self.assertEqual(current()['status'], 'done')
+        self.assertEqual(len(current()['pendingBugs']), 1)
+        self.admin.request(bug_path, {'archived':True}, 'PATCH')
+        self.assertEqual(current()['pendingBugs'], [])
+        self.admin.request(path, {'blocked':True, 'blockedReason':'Aguardando ambiente'}, 'PATCH')
+        self.assertTrue(current()['blocked'])
+        self.assertEqual(current()['status'], 'done')
+        self.admin.request(bug_path, {'archived':False}, 'PATCH')
+        second = self.create(type='technical-definition', parentId=parent['id'], status=column['id'])
+        self.admin.request(bug_path, {'parentId':second['id']}, 'PATCH')
+        self.assertEqual(current()['pendingBugs'], [])
+        self.admin.request(bug_path, method='DELETE')
+        self.admin.request(path, {'blocked':False}, 'PATCH')
+        before = app.PROJECTS_FILE.read_bytes()
+        self.assertFalse(current()['blocked'])
+        self.assertEqual(app.PROJECTS_FILE.read_bytes(), before)
+
+    def test_legacy_blocking_recovers_stage_once(self):
+        project = {'workItemColumns':[{'id':'custom-test','title':'Em Homol'}], 'workItems':[
+            {'id':'definition','type':'technical-definition','status':'blocked','history':[{'field':'status','before':'custom-test','after':'blocked'}]},
+            {'id':'bug','type':'bug','parentId':'definition','status':'open','title':'Bug'},
+            {'id':'manual','type':'requirement','status':'blocked','blockedReason':'Dependência externa'}]}
+        app._normalize_legacy_blocking(project)
+        definition, bug, manual = project['workItems']
+        self.assertEqual(definition['status'], 'custom-test')
+        self.assertFalse(definition['blocked'])
+        self.assertTrue(manual['blocked'])
+        self.assertEqual(manual['status'], 'analysis')
+        history = list(definition['history'])
+        app._normalize_legacy_blocking(project)
+        self.assertEqual(definition['history'], history)
+        app._sync_definition_blocking(project, 'definition')
+        self.assertEqual(len(definition['pendingBugs']), 1)
+        self.assertEqual(definition['status'], 'custom-test')
+
     def test_z_login_attempt_limit(self):
         client=Client(self.base)
         for _ in range(5): self.denied(401,lambda:client.login('missing@example.test','invalid-password'))

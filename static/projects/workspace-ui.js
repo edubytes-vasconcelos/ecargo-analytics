@@ -176,6 +176,6 @@ function syncWorkspaceMentions() {
 document.querySelector('#jumpToComposer').addEventListener('click', () => { document.querySelector('#commentText').focus(); document.querySelector('.comment-composer').scrollIntoView({ block: 'nearest' }); });
 function updateBlockedReasonVisibility() {
   const reason = document.querySelector('#workItemBlockedReason');
-  reason.closest('label').hidden = document.querySelector('#workItemStatus').value !== 'blocked' && !reason.value.trim();
+  reason.closest('label').hidden = !document.querySelector('#workItemBlocked').checked;
 }
-document.querySelector('#workItemStatus').addEventListener('change', updateBlockedReasonVisibility);
+document.querySelector('#workItemBlocked').addEventListener('change', updateBlockedReasonVisibility);

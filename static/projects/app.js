@@ -731,6 +731,7 @@ function renderTasks(container, tasks = [], state = { filter: "all", collapsed: 
 }
 
 function renderDashboard(projects) {
+  document.body.classList.remove("kanban-workspace");
   dashboardTitle.textContent = "Dashboard";
   projectsEl.className = "dashboard-sections";
   projectsEl.innerHTML = "";
@@ -1192,6 +1193,7 @@ function renderProjectDetail(project) {
   repaintTasks();
 
   projectsEl.appendChild(node);
+  requestAnimationFrame(syncKanbanViewport);
 }
 
 function configureCollapsiblePanel(root, state, key, bodySelector, buttonSelector) {
@@ -1244,6 +1246,22 @@ function renderWorkItems(root, project) {
   if (state.workItemFilter === "bug") viewOptions.push(["grouped", "Por definição"]);
   if (state.workItemFilter !== "archived") viewOptions.push(["kanban", "Kanban"]);
   if (!viewOptions.some(([value]) => value === state.workItemView)) state.workItemView = "list";
+  const isKanban = state.workItemView === "kanban";
+  document.body.classList.toggle("kanban-workspace", isKanban);
+  root.querySelector('.work-items-panel').closest('article').classList.toggle('kanban-project', isKanban);
+  if (isKanban) {
+    root.querySelector("[data-field='workItemsBody']").hidden = false;
+    const actions = root.querySelector('[data-action=report]')?.parentElement;
+    if (actions) {
+      actions.classList.add('kanban-project-actions');
+      const back = actions.querySelector('[data-action=back]');
+      const menu = document.createElement('details');
+      menu.className = 'kanban-project-menu';
+      menu.innerHTML = '<summary>Opções do projeto</summary><div></div>';
+      [...actions.children].filter(button => button !== back).forEach(button => menu.lastElementChild.appendChild(button));
+      actions.replaceChildren(...(back ? [back,menu] : [menu]));
+    }
+  }
   viewSwitch.innerHTML = viewOptions.map(([value, label]) => `<button type="button" class="${state.workItemView === value ? "active" : ""}" data-view="${value}">${label}</button>`).join("");
   viewSwitch.querySelectorAll("button").forEach((button) => button.addEventListener("click", () => {
     state.workItemView = button.dataset.view;
@@ -1299,7 +1317,7 @@ function workItemRowHtml(item, depth, allItems, project, showStage = true) {
       <div class="work-item-title-line"><h4>${escapeHtml(item.title)}</h4>${showStage ? statusPillHtml(project, item) : ""}</div>
       ${parent ? `<p class="work-item-parent">Vinculada a: ${escapeHtml(parent.title)}</p>` : ""}
       ${item.description ? `<div class="work-item-description markdown-content">${markdownBlock(item.description)}</div>` : ""}
-      ${workItemManagementHtml(item)}
+    ${workItemManagementHtml(item)}
     </div>
     <div class="work-item-meta">${childCount ? `<span>${childCount} vinculada${childCount > 1 ? "s" : ""}</span>` : ""}
     </div>
@@ -1501,7 +1519,6 @@ function workItemStatusForStage(type, stage) {
 const kanbanBuiltInColumns = [
   { id: "backlog", title: "A fazer" },
   { id: "progress", title: "Em andamento" },
-  { id: "blocked", title: "Bloqueado" },
   { id: "done", title: "Concluído" },
 ];
 
@@ -1512,7 +1529,21 @@ function kanbanColumnOrder(project) {
   return [...stored, ...availableIds.filter((id) => !stored.includes(id))];
 }
 
+function syncKanbanViewport() {
+  const board = document.querySelector('.kanban-workspace .work-item-kanban');
+  if (board) board.style.height = `${Math.max(260, window.innerHeight - board.getBoundingClientRect().top - 20)}px`;
+}
+window.addEventListener('resize', syncKanbanViewport);
+
+function kanbanAssigneeKey(item) {
+  return item.assigneeId ? `id:${item.assigneeId}` : item.assignee?.trim() ? `name:${item.assignee.trim()}` : 'unassigned';
+}
+
 function renderWorkItemKanban(container, visible, allItems, project, state) {
+  state.kanbanOwners ||= {};
+  const owners = new Map(allItems.filter(item => !item.archived).map(item => [kanbanAssigneeKey(item), item.assignee || 'Sem responsável']));
+  owners.set('unassigned', 'Sem responsável');
+  const ownerOptions = [...owners].sort((a,b) => a[1].localeCompare(b[1], 'pt-BR'));
   const customColumns = project.workItemColumns || [];
   const customById = new Map(customColumns.filter((column) => !column.archived).map((column) => [column.id, column]));
   const builtInById = new Map(kanbanBuiltInColumns.map((column) => [column.id, column]));
@@ -1522,9 +1553,12 @@ function renderWorkItemKanban(container, visible, allItems, project, state) {
   const archivedColumns = customColumns.filter((column) => column.archived);
   container.className = "work-item-kanban";
   container.innerHTML = columns.map((column) => {
-    const cards = visible.filter((item) => workItemStage(item) === column.id);
+    const columnItems = visible.filter(item => workItemStage(item) === column.id);
+    const owner = state.kanbanOwners[column.id] || '';
+    const cards = columnItems.filter(item => !owner || kanbanAssigneeKey(item) === owner);
     return `<section class="kanban-column stage-${column.id}" data-kanban-stage="${escapeHtml(column.id)}">
-      <div class="kanban-column-head" draggable="true"><h4>${escapeHtml(column.title)}</h4><span>${cards.length}</span>${column.custom ? kanbanColumnMenuHtml(column) : ""}</div>
+      <div class="kanban-column-head" draggable="true"><h4>${escapeHtml(column.title)}</h4><span title="Atividades visíveis nesta lista">${owner ? `${cards.length}/${columnItems.length}` : cards.length}</span>${column.custom ? kanbanColumnMenuHtml(column) : ""}</div>
+      <label class="kanban-owner-filter ${owner ? 'is-filtered' : ''}"><span>Responsável</span><select data-column-owner="${escapeHtml(column.id)}" aria-label="Responsável na lista ${escapeHtml(column.title)}"><option value="">Todos</option>${ownerOptions.map(([key,name]) => `<option value="${escapeHtml(key)}" ${key === owner ? 'selected' : ''}>${escapeHtml(name)}</option>`).join('')}</select></label>
       <div class="kanban-column-body">${cards.map((item) => {
         const parent = allItems.find((candidate) => candidate.id === item.parentId);
         const childCount = allItems.filter((candidate) => candidate.parentId === item.id).length;
@@ -1562,6 +1596,16 @@ function renderWorkItemKanban(container, visible, allItems, project, state) {
         </div>`
       : `<button type="button" class="kanban-archived-trigger" data-action="toggle-archived-lists">Listas arquivadas (${archivedColumns.length})</button>`)
     : "");
+  container.querySelectorAll('[data-column-owner]').forEach(select => select.addEventListener('change', () => {
+    const left = container.scrollLeft;
+    const stage = select.dataset.columnOwner;
+    const positions = new Map([...container.querySelectorAll('.kanban-column')].map(column => [column.dataset.kanbanStage, column.querySelector('.kanban-column-body').scrollTop]));
+    state.kanbanOwners[stage] = select.value;
+    renderWorkItemKanban(container, visible, allItems, project, state);
+    container.scrollLeft = left;
+    container.querySelectorAll('.kanban-column').forEach(column => { column.querySelector('.kanban-column-body').scrollTop = positions.get(column.dataset.kanbanStage) || 0; });
+    [...container.querySelectorAll('[data-column-owner]')].find(input => input.dataset.columnOwner === stage)?.focus({preventScroll:true});
+  }));
   bindWorkItemActions(container, allItems, project);
   container.querySelectorAll("[data-action='kanban-add']").forEach((button) => button.addEventListener("click", () => {
     const preferredType = ["requirement", "technical-definition", "bug"].includes(filterForProject(project)) ? filterForProject(project) : "requirement";
@@ -1818,6 +1862,7 @@ function openWorkItemEditor(project, item = null, stage = null, preferredType = 
   else if (stage) workItemStatus.value = workItemStatusForStage(workItemType.value, stage);
   workItemTitle.value = item?.title || "";
   workItemDescription.value = item?.description || "";
+  document.querySelector('#workItemBlocked').checked = Boolean(item?.blocked);
   for (const field of ["assignee", "priority", "dueDate", "nextAction", "blockedReason", "acceptanceCriteria"]) {
     if (field === "assignee") { populateCardAssignees(item); continue; }
     document.getElementById(`workItem${field[0].toUpperCase()}${field.slice(1)}`).value = item?.[field] || (field === "priority" ? "normal" : "");
@@ -2347,6 +2392,7 @@ workItemForm.addEventListener("submit", async (event) => {
     title: workItemTitle.value.trim(),
     description: workItemDescription.value.trim(),
     parentId: workItemParentField.hidden ? null : workItemParent.value,
+    blocked: document.querySelector('#workItemBlocked').checked,
     ...Object.fromEntries(["assignee", "priority", "dueDate", "nextAction", "blockedReason", "acceptanceCriteria"].map((field) => [field, document.getElementById(`workItem${field[0].toUpperCase()}${field.slice(1)}`).value.trim()])),
     checklist: editorChecklist,
     assigneeId: document.querySelector("#workItemAssignee").value.startsWith("local:") ? document.querySelector("#workItemAssignee").value : "",
