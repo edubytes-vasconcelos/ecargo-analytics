@@ -24,6 +24,7 @@ async function loadProjectIdentity() {
     if (usersResponse.ok) authState.users = await usersResponse.json();
   }
   renderProjectIdentity();
+  document.dispatchEvent(new Event("project-identity-loaded"));
   if (authState.user?.mustChangePassword) openLocalAuth("password");
 }
 

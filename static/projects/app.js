@@ -38,6 +38,9 @@ let managerAssistantProjectId = null;
 let managerAssistantBusy = false;
 let managerAssistantHistory = [];
 let managerAssistantStatusPromise = Promise.resolve({ provider: "interno", model: "" });
+document.addEventListener("project-identity-loaded", () => {
+  if (!isProjectManagerAdmin()) managerAssistantPanel.hidden = true;
+});
 const studyEditModal = document.querySelector("#studyEditModal");
 const studyEditForm = document.querySelector("#studyEditForm");
 const studyEditName = document.querySelector("#studyEditName");
@@ -1649,10 +1652,6 @@ function renderProjectDetail(project) {
   node.querySelector("[data-action='update']").addEventListener("click", () => chooseScheduleUpdate(project.id));
   node.querySelector("[data-action='notes']").addEventListener("click", () => openNotes(project));
   node.querySelector("[data-action='add-work-item']").addEventListener("click", () => openWorkItemEditor(project));
-  const managerAssistantButton = node.querySelector("[data-action='project-manager']");
-  managerAssistantButton.hidden = !isProjectManagerAgentSupported(project);
-  managerAssistantButton.addEventListener("click", () => openProjectManagerAssistant(project));
-
   configureCollapsiblePanel(node, taskState, "schedule", "[data-field='scheduleBody']", "[data-action='toggle-schedule']");
   configureCollapsiblePanel(node, taskState, "work-items", "[data-field='workItemsBody']", "[data-action='toggle-work-items']");
 
@@ -1675,8 +1674,12 @@ function isProjectManagerAgentSupported(project) {
   return normalize(project?.name) === normalize("Reforma Tributária - escopo Novas taxas e Novas adequações fiscais");
 }
 
+function isProjectManagerAdmin() {
+  return authState.user?.role === "admin" && !authState.user.mustChangePassword;
+}
+
 function openProjectManagerAssistant(project) {
-  if (!isProjectManagerAgentSupported(project)) return;
+  if (!isProjectManagerAgentSupported(project) || !isProjectManagerAdmin() || projectUiState.get(project.id)?.workItemView !== "kanban") return;
   managerAssistantProjectId = project.id;
   managerAssistantPanel.querySelector("[data-field='managerAssistantProject']").textContent = project.name;
   managerAssistantPanel.hidden = false;
@@ -1853,6 +1856,10 @@ function renderWorkItems(root, project) {
   const isKanban = state.workItemView === "kanban";
   document.body.classList.toggle("kanban-workspace", isKanban);
   root.querySelector('.work-items-panel').closest('article').classList.toggle('kanban-project', isKanban);
+  const managerAssistantButton = root.querySelector("[data-action='project-manager']");
+  managerAssistantButton.hidden = !(isKanban && isProjectManagerAdmin() && isProjectManagerAgentSupported(project));
+  managerAssistantButton.onclick = () => openProjectManagerAssistant(project);
+  if (!isKanban || !isProjectManagerAdmin()) managerAssistantPanel.hidden = true;
   if (isKanban) {
     root.querySelector("[data-field='workItemsBody']").hidden = false;
     const actions = root.querySelector('[data-action=report]')?.parentElement;
@@ -3183,4 +3190,7 @@ setupMarkdownEditors();
 loadSettings()
   .catch(() => updateCriteriaText())
   .then(loadProjects);
+projectAuthReady.then(() => {
+  if (selectedProjectId) loadProjects();
+});
 setInterval(loadProjects, 60000);

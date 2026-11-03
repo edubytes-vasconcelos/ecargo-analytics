@@ -111,7 +111,6 @@
             <p data-field="folder"></p>
           </div>
           <div class="header-actions">
-            <button type="button" data-action="project-manager" class="manager-assistant-trigger" hidden>Assistente de gestão</button>
             <button type="button" data-action="report" title="Gerar e-mail de status">Gerar status report</button>
             <button type="button" data-action="update" title="Atualizar cronograma da evolutiva">Atualizar cronograma</button>
             <button type="button" data-action="notes" title="Adicionar informações da evolutiva">Informações</button>
@@ -182,6 +181,7 @@
               <p>Acompanhe requisitos, definições técnicas e bugs de teste.</p>
             </div>
             <div class="work-items-actions">
+              <button type="button" data-action="project-manager" class="manager-assistant-trigger" hidden>Assistente de gestão</button>
               <div class="view-switch" data-field="workItemViewSwitch" aria-label="Visualização das atividades"></div>
               <button type="button" data-action="add-work-item">Nova atividade</button>
               <button type="button" class="collapse-button" data-action="toggle-work-items" aria-expanded="true">Recolher</button>
@@ -293,7 +293,7 @@
           <section>
             <h3>Assistente de gestão da Reforma Tributária</h3>
             <ol>
-              <li>No projeto Reforma Tributária - escopo Novas taxas e Novas adequações fiscais, selecione Assistente de gestão para consultar status, riscos, cobranças, responsáveis, próximas ações ou pauta de reunião.</li>
+              <li>Somente administradores veem o Assistente de gestão. No Kanban do projeto Reforma Tributária - escopo Novas taxas e Novas adequações fiscais, use-o para consultar status, riscos, cobranças, responsáveis, distribuição de trabalho, próximas ações ou pauta de reunião.</li>
               <li>Sem uma chave OpenAI configurada, as respostas usam regras internas. Com a chave ativa, a pergunta, o histórico recente e campos dos cards são enviados à API OpenAI; o assistente não altera cards nem envia mensagens automaticamente.</li>
               <li>Para uma cobrança, selecione Preparar cobrança. Revise o rascunho na conversa da atividade, confirme a pessoa mencionada e clique em Enviar mensagem somente quando estiver pronto.</li>
             </ol>
@@ -543,9 +543,9 @@
     </div>
 
     <div id="notificationModal" class="modal" hidden><div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="notificationTitle"><div class="modal-header"><h2 id="notificationTitle">Notificações</h2><button id="closeNotifications" type="button">Fechar</button></div><div id="notificationList"></div></div></div>
-    <script src="__BASE_PATH__/projects/auth.js?v=4"></script>
+    <script src="__BASE_PATH__/projects/auth.js?v=5"></script>
     <script src="__BASE_PATH__/projects/management.js?v=8"></script>
-    <script src="__BASE_PATH__/projects/app.js?v=61"></script>
+    <script src="__BASE_PATH__/projects/app.js?v=62"></script>
     <script src="__BASE_PATH__/projects/mentions.js?v=2"></script>
     <script src="__BASE_PATH__/projects/workspace-ui.js?v=5"></script>
   </body>

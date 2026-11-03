@@ -1775,6 +1775,12 @@ class Handler(BaseHTTPRequestHandler):
             return
         manager_status_match = re.fullmatch(r"/api/projects/([^/]+)/project-manager/status", path)
         if manager_status_match:
+            identity = project_auth.require_read(self, DATA_DIR)
+            if identity is None:
+                return
+            if identity["user"].get("role") != "admin":
+                self._send_json({"error": "O assistente de gestão está disponível apenas para administradores."}, 403)
+                return
             project = _find_project(read_projects(), manager_status_match.group(1))
             if project is None:
                 self._send_json({"error": "Projeto não encontrado."}, 404)
@@ -1875,6 +1881,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         manager_match = re.fullmatch(r"/api/projects/([^/]+)/project-manager", path)
         if manager_match:
+            if self.project_identity.get("role") != "admin":
+                self._send_json({"error": "O assistente de gestão está disponível apenas para administradores."}, 403)
+                return
             try:
                 length = int(self.headers.get("Content-Length", "0") or "0")
                 if length > 24 * 1024:
