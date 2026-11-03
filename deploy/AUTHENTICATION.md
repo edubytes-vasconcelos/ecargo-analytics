@@ -48,3 +48,16 @@ python scripts/smoke_project_management.py
 Os testes criam dados e contas temporários. Não cadastram usuários reais. O teste no navegador precisa do Playwright já instalado no ambiente de desenvolvimento.
 
 Referências: [armazenamento de senhas OWASP](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html), [hashlib.scrypt](https://docs.python.org/3/library/hashlib.html).
+
+## Publicação em homologação
+
+O ambiente atual é o namespace `hml-signa-ecargo`, no contexto `cluster-tvv-stg-001`, acessível em `https://ecargohml.k8s.loginlogistica.com.br/ecargo-analytics/projetos`.
+
+O GitHub Actions gera a imagem Docker com tag do commit. O deploy automático antigo não alcança o DNS interno do Rancher a partir do runner público. Enquanto esse acesso de rede não for disponibilizado, a atualização deve ser feita de uma máquina com acesso ao cluster, usando a imagem imutável publicada:
+
+```sh
+kubectl --context cluster-tvv-stg-001 -n hml-signa-ecargo set image deployment/ecargo-analytics ecargo-analytics=ghcr.io/edubytes-vasconcelos/ecargo-analytics:SHA_DO_COMMIT
+kubectl --context cluster-tvv-stg-001 -n hml-signa-ecargo rollout status deployment/ecargo-analytics --timeout=300s
+```
+
+Mantenha `IMAGE` em `k8s/vars.hml.env` apontando para a mesma tag. Antes de atualizar, faça backup dos JSONs e bancos SQLite do volume `/app/data`. Para reversão, use o digest da imagem anteriormente executada; uma tag reutilizável de branch pode já apontar para outra versão.
