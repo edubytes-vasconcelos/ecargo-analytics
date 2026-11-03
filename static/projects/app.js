@@ -58,19 +58,27 @@ const deleteWorkItemButton = document.querySelector("#deleteWorkItemButton");
 const projectUiState = new Map();
 const appBasePath = document.documentElement.dataset.basePath || "";
 const WORK_ITEM_VIEW_STORAGE_KEY = "projects:workItemView";
+const PREFERRED_WORK_ITEM_VIEWS = new Set(["list", "status", "kanban"]);
 let editorSourceCodeLinks = [];
+
+function workItemViewStorageKey() {
+  const userId = authState.user?.id || "anonymous";
+  return `${WORK_ITEM_VIEW_STORAGE_KEY}:${userId}`;
+}
 
 function getStoredWorkItemView() {
   try {
-    return localStorage.getItem(WORK_ITEM_VIEW_STORAGE_KEY) || "list";
+    const saved = localStorage.getItem(workItemViewStorageKey()) || localStorage.getItem(WORK_ITEM_VIEW_STORAGE_KEY);
+    return PREFERRED_WORK_ITEM_VIEWS.has(saved) ? saved : "list";
   } catch {
     return "list";
   }
 }
 
 function setStoredWorkItemView(view) {
+  if (!PREFERRED_WORK_ITEM_VIEWS.has(view)) return;
   try {
-    localStorage.setItem(WORK_ITEM_VIEW_STORAGE_KEY, view);
+    localStorage.setItem(workItemViewStorageKey(), view);
   } catch {
     /* localStorage indisponível (modo privado etc.) — preferência não persiste nesta sessão */
   }
@@ -1191,7 +1199,7 @@ function renderProjectDetail(project) {
   const { dashboard, realized, planned, variance, selectedFile } = getDashboardNumbers(project);
 
   if (!projectUiState.has(project.id)) {
-    projectUiState.set(project.id, { filter: "all", collapsed: new Set() });
+    projectUiState.set(project.id, { filter: "all", collapsed: new Set(), workItemView: getStoredWorkItemView() });
   }
   const taskState = projectUiState.get(project.id);
 
@@ -2009,6 +2017,8 @@ function renderCurrentView() {
 }
 
 function openProject(id) {
+  const state = projectUiState.get(id);
+  if (state) state.workItemView = getStoredWorkItemView();
   selectedProjectId = id;
   localStorage.setItem("selectedProjectId", id);
   renderCurrentView();

@@ -33,7 +33,7 @@ Este guia mostra como registrar e acompanhar atividades de um projeto no painel,
 
 ## 4. Organizar o trabalho no Kanban
 
-Use o seletor de visualização para alternar entre **Kanban** e **Lista**. No Kanban, cada lista representa uma etapa e cada card representa uma atividade. Arraste um card para outra lista ou use **Mover para** no menu do card. O nome da lista é a etapa do card; não há um segundo status independente.
+Use o seletor de visualização para alternar entre **Kanban**, **Lista** e **Por etapa**. Sua última escolha entre essas visualizações fica salva neste navegador para sua conta e é aplicada ao abrir qualquer evolutiva. No Kanban, cada lista representa uma etapa e cada card representa uma atividade. Arraste um card para outra lista ou use **Mover para** no menu do card. O nome da lista é a etapa do card; não há um segundo status independente.
 
 | Tipo | Etapas disponíveis |
 |---|---|
