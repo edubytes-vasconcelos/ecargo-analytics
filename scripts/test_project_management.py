@@ -256,6 +256,23 @@ class ProjectManagementTests(unittest.TestCase):
         self.assertEqual(len(definition['pendingBugs']), 1)
         self.assertEqual(definition['status'], 'custom-test')
 
+    def test_public_schedule_update(self):
+        anonymous=Client(self.base)
+        project=anonymous.request('/api/projects',{'name':'Cronograma público','notes':'Escopo'})
+        study=anonymous.request('/api/projects/study',{'title':'Estudo sem cronograma'})
+        boundary='schedule-test'
+        def upload(project_id, filename='cronograma.xml'):
+            raw=(f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="{filename}"\r\nContent-Type: application/xml\r\n\r\n<Project xmlns="http://schemas.microsoft.com/project"><Name>Teste</Name></Project>\r\n--{boundary}--\r\n').encode()
+            return anonymous.request(f'/api/projects/{project_id}/upload',raw=raw,content_type=f'multipart/form-data; boundary={boundary}')
+        with tempfile.TemporaryDirectory() as directory, patch.object(app,'PROJECT_UPLOADS',Path(directory)), patch.object(app,'inspect_project',return_value={}):
+            result=upload(project['id'])
+            self.assertEqual(result['uploadedSchedule']['name'],'cronograma.xml')
+            self.denied(400,lambda:upload(project['id'],'cronograma.txt'))
+            self.denied(400,lambda:upload(study['id']))
+            self.denied(404,lambda:upload('inexistente'))
+        self.denied(401,lambda:anonymous.request('/api/projects/'+project['id'],method='DELETE'))
+        self.denied(401,lambda:self.create(anonymous))
+
     def test_z_login_attempt_limit(self):
         client=Client(self.base)
         for _ in range(5): self.denied(401,lambda:client.login('missing@example.test','invalid-password'))

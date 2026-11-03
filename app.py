@@ -69,7 +69,8 @@ def project_store_transaction(request_handler):
             project_update = handler.command == "PATCH" and re.fullmatch(r"/api/projects/[^/]+", path)
             public_plan = handler.command == "POST" and path == "/api/project-settings/plan-image"
             public_creation = handler.command == "POST" and path in {"/api/projects", "/api/projects/study", "/api/projects/upload"}
-            if handler.command in {"POST", "PATCH", "DELETE"} and protected and not (public_completion or public_notes or public_plan or project_update or public_creation):
+            public_schedule = handler.command == "POST" and re.fullmatch(r"/api/projects/[^/]+/upload", path)
+            if handler.command in {"POST", "PATCH", "DELETE"} and protected and not (public_completion or public_notes or public_plan or project_update or public_creation or public_schedule):
                 identity = project_auth.require_write(handler, DATA_DIR, admin=path.startswith("/api/project-settings"))
                 if identity is None:
                     return
