@@ -12,7 +12,14 @@ Este guia mostra como registrar e acompanhar atividades de um projeto no painel,
 2. Selecione o projeto que receberá as atividades.
 3. Localize a área **Atividades do projeto**. Para criar ou alterar atividades, conversar, anexar arquivos e receber notificações pessoais, entre com uma conta ativa.
 
-## 2. Registrar uma atividade
+## 2. Acompanhar evolutivas no dashboard
+
+1. No dashboard, use **Todas**, **Em andamento** ou **Concluídas** para consultar as evolutivas por situação. Os números ao lado dos filtros mostram quantas evolutivas há em cada grupo.
+2. Em um card, selecione **Concluir projeto** quando a evolutiva estiver finalizada. A conclusão fica salva no projeto e aparece como **Concluída**.
+3. Para retomar uma evolutiva, selecione **Reabrir**. Ela volta para **Em andamento**.
+4. A conclusão da evolutiva é independente da etapa dos cards de atividade: concluir o projeto não fecha nem move suas atividades automaticamente.
+
+## 3. Registrar uma atividade
 
 1. Selecione **Nova atividade**.
 2. Informe um título curto que descreva o resultado esperado.
@@ -24,7 +31,7 @@ Este guia mostra como registrar e acompanhar atividades de um projeto no painel,
 8. Registre **Critérios de conclusão** e inclua itens no **Checklist** quando a atividade exigir etapas menores.
 9. Se houver um impedimento manual, marque **Bloqueada por outro motivo** e descreva a causa. Salve a atividade.
 
-## 3. Organizar o trabalho no Kanban
+## 4. Organizar o trabalho no Kanban
 
 Use o seletor de visualização para alternar entre **Kanban** e **Lista**. No Kanban, cada lista representa uma etapa e cada card representa uma atividade. Arraste um card para outra lista ou use **Mover para** no menu do card. O nome da lista é a etapa do card; não há um segundo status independente.
 
@@ -36,7 +43,7 @@ Use o seletor de visualização para alternar entre **Kanban** e **Lista**. No K
 
 Use os filtros para encontrar atividades atrasadas, bloqueadas, sem responsável, próximas do prazo, atribuídas a você ou que mencionaram você. Cada lista também tem um filtro de responsável, incluindo a opção **Sem responsável**. Segure a barra de espaço e arraste com o mouse para deslocar o quadro; cada lista pode rolar verticalmente.
 
-## 4. Registrar e acompanhar bugs
+## 5. Registrar e acompanhar bugs
 
 1. Abra a Definição Técnica afetada e crie uma atividade do tipo **Bug**.
 2. Confirme o vínculo com a Definição Técnica e atribua um responsável.
@@ -49,7 +56,7 @@ Use um título curto que identifique o problema e evite incluir senhas, tokens o
 
 Bugs abertos vinculados a uma Definição Técnica aparecem como uma pendência nessa definição. O alerta não muda automaticamente a etapa da definição. Ele desaparece quando todos os bugs vinculados forem fechados ou arquivados. Se houver outro impedimento, registre-o separadamente em **Bloqueada por outro motivo**.
 
-## 5. Conversar e notificar pessoas
+## 6. Conversar e notificar pessoas
 
 1. Abra uma atividade já salva e escolha a aba **Conversa**.
 2. Escreva a mensagem. Para mencionar alguém, digite **@** e selecione a pessoa na lista sugerida. Escrever o nome sem selecionar não cria uma menção.
@@ -57,17 +64,17 @@ Bugs abertos vinculados a uma Definição Técnica aparecem como uma pendência 
 4. O autor da mensagem não recebe uma notificação de si mesmo. Para pedir uma ação, mencione outra pessoa ativa.
 5. Use **Responder** para manter uma mensagem ligada ao comentário original.
 
-## 6. Anexar evidências e consultar o histórico
+## 7. Anexar evidências e consultar o histórico
 
 Na aba **Evidências**, selecione arquivos, arraste-os para a área indicada ou cole uma captura de tela com **Ctrl+V**. Cada arquivo pode ter até 20 MB. Aguarde o envio terminar antes de fechar a atividade.
 
 Abra **Histórico** para consultar alterações registradas na atividade. Use o Checklist para acompanhar passos menores sem criar um card para cada ação.
 
-## 7. Usar o modo escuro
+## 8. Usar o modo escuro
 
 No cabeçalho, selecione o ícone de lua para ativar o modo escuro. Selecione o ícone de sol para voltar ao modo claro. A escolha fica salva neste navegador e não altera a aparência dos outros usuários.
 
-## 8. Boas práticas por perfil
+## 9. Boas práticas por perfil
 
 - **Gerente de projeto:** acompanhe responsáveis, prazos e bloqueios; use filtros de atenção para preparar alinhamentos.
 - **Desenvolvedor:** registre decisões e próximas ações na atividade; mantenha o bug vinculado à Definição Técnica e atualize sua etapa.

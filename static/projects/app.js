@@ -91,6 +91,7 @@ let selectedProjectId = localStorage.getItem("selectedProjectId") || null;
 let draggedDashboardCard = null;
 let draggedDashboardSection = null;
 let percentageAlignmentFrame = null;
+let dashboardProjectFilter = "all";
 let editingWorkItemId = null;
 let editingWorkItemRev = 0;
 let workItemProjectId = null;
@@ -740,9 +741,9 @@ function renderDashboard(projects) {
   projectsEl.className = "dashboard-sections";
   projectsEl.innerHTML = "";
 
-  projectsEl.appendChild(renderManagementOverview(projects));
   const ordered = orderedDashboardProjects(projects);
-  const sections = [renderWorkPlanSection(), renderDashboardSection("Evolutivas", ordered.projects, "projects"), renderDashboardSection("Estudos", ordered.studies, "studies")].filter(Boolean);
+  const visibleProjects = ordered.projects.filter((project) => dashboardProjectFilter === "all" || Boolean(project.completed) === (dashboardProjectFilter === "completed"));
+  const sections = [renderWorkPlanSection(), renderDashboardSection("Evolutivas", visibleProjects, "projects", ordered.projects), renderDashboardSection("Estudos", ordered.studies, "studies")].filter(Boolean);
   for (const section of orderedDashboardSections(sections)) {
     projectsEl.appendChild(section);
   }
@@ -835,8 +836,8 @@ function renderWorkPlanSection() {
   return section;
 }
 
-function renderDashboardSection(title, items, group) {
-  if (!items.length) return null;
+function renderDashboardSection(title, items, group, allItems = items) {
+  if (!allItems.length) return null;
 
   const collapsed = isDashboardSectionCollapsed(group);
   const section = document.createElement("section");
@@ -848,7 +849,9 @@ function renderDashboardSection(title, items, group) {
     <div class="dashboard-section-head">
       <div>
         <h3>${title}</h3>
-        <span>${items.length} ${items.length === 1 ? "item" : "itens"} - ordem manual</span>
+        ${group === "projects" ? `<div class="evolution-filters" aria-label="Filtrar evolutivas">
+          ${[["all", "Todas"], ["active", "Em andamento"], ["completed", "Concluídas"]].map(([value, label]) => `<button type="button" data-project-filter="${value}" aria-pressed="${dashboardProjectFilter === value}">${label}<span>${allItems.filter((project) => value === "all" || Boolean(project.completed) === (value === "completed")).length}</span></button>`).join("")}
+        </div>` : `<span>${items.length} ${items.length === 1 ? "item" : "itens"} - ordem manual</span>`}
       </div>
       <button class="section-toggle" type="button" aria-expanded="${collapsed ? "false" : "true"}">${collapsed ? "Expandir" : "Recolher"}</button>
     </div>
@@ -856,11 +859,25 @@ function renderDashboardSection(title, items, group) {
   `;
   const grid = section.querySelector(".dashboard-grid");
 
+  if (group === "projects") {
+    section.querySelectorAll("[data-project-filter]").forEach((button) => button.addEventListener("click", () => {
+      dashboardProjectFilter = button.dataset.projectFilter;
+      renderDashboard(projectsCache);
+    }));
+  }
+
   for (const project of items) {
     grid.appendChild(isStudyProject(project) ? createStudyCard(project) : isConstructionProject(project) ? createConstructionCard(project) : createProjectCard(project));
   }
 
-  enableDashboardSorting(grid);
+  if (group !== "projects" || dashboardProjectFilter === "all") enableDashboardSorting(grid);
+  else grid.querySelectorAll(".summary-card").forEach((card) => { card.draggable = false; card.title = ""; });
+  if (group === "projects" && !items.length) {
+    const empty = document.createElement("p");
+    empty.className = "evolution-empty";
+    empty.textContent = dashboardProjectFilter === "completed" ? "Nenhuma evolutiva concluída." : "Nenhuma evolutiva em andamento.";
+    grid.appendChild(empty);
+  }
   section.querySelector(".section-toggle").addEventListener("click", () => toggleDashboardSection(section, group));
   return section;
 }
@@ -1000,7 +1017,7 @@ function createConstructionCard(project) {
         </div>
         <p>Evolutiva sem cronograma</p>
       </div>
-      <span class="summary-status construction">Em construção</span>
+      <div class="summary-status-stack"><span class="summary-status ${project.completed ? "completed" : "construction"}">${project.completed ? "Concluída" : "Em construção"}</span>${projectCompletionButton(project)}</div>
     </div>
     <div class="note-preview markdown-content">${markdownBlock(project.notes, "Evolutiva em construção aguardando cronograma ou definição complementar.")}</div>
     <div class="summary-actions construction-actions">
@@ -1015,6 +1032,7 @@ function createConstructionCard(project) {
   card.querySelector("[data-action='update']").addEventListener("click", () => chooseScheduleUpdate(project.id));
   card.querySelector("[data-action='notes']").addEventListener("click", () => openNotes(project));
   card.querySelector("[data-action='delete']").addEventListener("click", () => deleteProject(project.id));
+  bindProjectCompletion(card, project);
   return card;
 }
 
@@ -1033,7 +1051,7 @@ function createProjectCard(project) {
         </div>
         <p>${escapeHtml(selectedFile?.name || "Nenhum cronograma localizado")}</p>
       </div>
-      <span class="summary-status ${riskClass}">${dashboard.status === "parsed" ? projectRiskLabel(dashboard, variance) : "Falha"}</span>
+      <div class="summary-status-stack"><span class="summary-status ${project.completed ? "completed" : riskClass}">${project.completed ? "Concluída" : dashboard.status === "parsed" ? projectRiskLabel(dashboard, variance) : "Falha"}</span>${projectCompletionButton(project)}</div>
     </div>
     <div class="summary-kpis">
       <div><span>Planejado</span><strong>${planned}%</strong></div>
@@ -1055,7 +1073,31 @@ function createProjectCard(project) {
   card.querySelector("[data-action='edit']").addEventListener("click", () => openStudyEditor(project));
   card.querySelector("[data-action='update']").addEventListener("click", () => chooseScheduleUpdate(project.id));
   card.querySelector("[data-action='notes']").addEventListener("click", () => openNotes(project));
+  bindProjectCompletion(card, project);
   return card;
+}
+
+function projectCompletionButton(project) {
+  return `<button class="project-completion-toggle" type="button" data-action="toggle-completion" aria-label="${project.completed ? "Reabrir evolutiva" : "Marcar evolutiva como concluída"}">${project.completed ? "Reabrir" : "Concluir projeto"}</button>`;
+}
+
+function bindProjectCompletion(card, project) {
+  card.querySelector("[data-action='toggle-completion']")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    try {
+      const response = await fetch(`${appBasePath}/api/projects/${project.id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ completed: !project.completed }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Não foi possível atualizar a evolutiva.");
+      await loadProjects();
+    } catch (error) {
+      window.alert(error.message);
+      button.disabled = false;
+    }
+  });
 }
 
 function createDashboardCard(project, className) {

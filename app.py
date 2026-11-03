@@ -2268,6 +2268,18 @@ class Handler(BaseHTTPRequestHandler):
                     project["name"] = title
                 if project.get("type") == "study" and "description" in payload:
                     project["description"] = str(payload.get("description", "")).strip()
+                if "completed" in payload:
+                    if not isinstance(payload["completed"], bool):
+                        self._send_json({"error": "O estado de conclusão deve ser verdadeiro ou falso."}, 400)
+                        return
+                    if project.get("type") == "study":
+                        self._send_json({"error": "A conclusão neste painel está disponível apenas para evolutivas."}, 400)
+                        return
+                    project["completed"] = payload["completed"]
+                    if payload["completed"]:
+                        project["completedAt"] = datetime.now().isoformat(timespec="seconds")
+                    else:
+                        project.pop("completedAt", None)
                 project["updatedAt"] = datetime.now().isoformat(timespec="seconds")
                 updated = project
                 break

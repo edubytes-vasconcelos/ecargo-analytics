@@ -5,23 +5,6 @@ let commentReplyTo = null;
 let collaborationBusy = false;
 const managementPriorities = { low: "Baixa", normal: "Normal", high: "Alta", urgent: "Urgente" };
 const managementFields = { title: "Título", status: "Etapa", description: "Descrição", parentId: "Vínculo", assignee: "Responsável", priority: "Prioridade", dueDate: "Prazo", nextAction: "Próxima ação", blocked: "Bloqueio manual", blockedReason: "Motivo do bloqueio", acceptanceCriteria: "Critérios de conclusão", checklist: "Checklist", archived: "Arquivamento" };
-let dashboardAttentionFilter = "overdue";
-
-function renderManagementOverview(projects) {
-  const section = document.createElement("section");
-  section.className = "dashboard-section management-overview";
-  const entries = projects.flatMap((project) => (project.workItems || []).filter((item) => !item.archived).map((item) => ({ project, item })));
-  const filters = [["overdue", "Atrasadas"], ["blocked", "Bloqueadas"], ["unassigned", "Sem responsável"], ["soon", "Vencem em 7 dias"]];
-  section.innerHTML = `<h2>Atenção às atividades</h2><div class="work-item-summary" data-field="managementOverview">${filters.map(([filter, title]) => `<button type="button" class="attention-metric ${filter === dashboardAttentionFilter ? "active" : ""}" data-overview-filter="${filter}"><strong>${entries.filter(({ item }) => workItemMatchesAttention(item, filter)).length}</strong><span>${title}</span></button>`).join("")}</div><div class="management-attention-list">${entries.filter(({ item }) => workItemMatchesAttention(item, dashboardAttentionFilter)).map(({ project, item }) => `<button type="button" class="management-attention-item" data-open-project="${escapeHtml(project.id)}" data-open-item="${escapeHtml(item.id)}"><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(project.name)} · ${escapeHtml(item.assignee || "Sem responsável")}${item.dueDate ? ` · ${escapeHtml(formatDate(`${item.dueDate}T12:00:00`))}` : ""}</span></button>`).join("") || '<p class="hint">Nenhuma atividade neste filtro.</p>'}</div>`;
-  section.querySelectorAll("[data-overview-filter]").forEach((button) => button.addEventListener("click", () => { dashboardAttentionFilter = button.dataset.overviewFilter; renderDashboard(projects); }));
-  section.querySelectorAll("[data-open-item]").forEach((button) => button.addEventListener("click", () => {
-    const project = projects.find((entry) => entry.id === button.dataset.openProject);
-    openProject(project.id);
-    openWorkItemEditor(project, project.workItems.find((item) => item.id === button.dataset.openItem));
-  }));
-  return section;
-}
-
 function managementIdentity() {
   return authState.user?.id || "";
 }
