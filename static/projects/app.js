@@ -1754,7 +1754,11 @@ async function askProjectManager(question) {
   if (!managerAssistantProjectId || managerAssistantBusy) return;
   const prompt = String(question || "").trim();
   if (!prompt) return;
-  const history = managerAssistantHistory.slice(-10);
+  const history = managerAssistantHistory.slice(-10).map((entry) => ({
+    role: entry.role,
+    content: String(entry.content || "").slice(0, entry.role === "assistant" ? 3500 : 1000),
+  }));
+  while (history.length && history.reduce((total, entry) => total + entry.content.length, 0) > 8000) history.shift();
   managerAssistantHistory.push({ role: "user", content: prompt });
   appendManagerAssistantMessage("user", prompt);
   managerAssistantInput.value = "";

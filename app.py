@@ -1902,11 +1902,13 @@ class Handler(BaseHTTPRequestHandler):
                     if not isinstance(entry, dict) or entry.get("role") not in {"user", "assistant"}:
                         raise ValueError("O histórico da conversa é inválido.")
                     content = entry.get("content")
-                    if not isinstance(content, str) or len(content) > 1000:
+                    if not isinstance(content, str):
                         raise ValueError("O histórico da conversa é inválido.")
-                    history.append({"role": entry["role"], "content": content})
+                    limit = 1000 if entry["role"] == "user" else 3500
+                    history.append({"role": entry["role"], "content": content[:limit]})
                 if sum(len(entry["content"]) for entry in history) > 8000:
-                    raise ValueError("O histórico da conversa é muito extenso. Inicie uma nova conversa.")
+                    while history and sum(len(entry["content"]) for entry in history) > 8000:
+                        history.pop(0)
                 project = _find_project(read_projects(), manager_match.group(1))
                 if project is None:
                     self._send_json({"error": "Projeto não encontrado."}, 404)
