@@ -2974,6 +2974,10 @@ hideStudyFormButton.addEventListener("click", () => {
   studyFormPanel.hidden = true;
 });
 openSettingsButton.addEventListener("click", () => {
+  if (!authState.user || authState.user.role !== 'admin' || authState.user.mustChangePassword) {
+    openWorkPlanSettings();
+    return;
+  }
   settingsModal.querySelector('.settings-block').hidden = false;
   settingsModal.querySelector('.criteria-panel').hidden = false;
   document.querySelector('#settingsTitle').textContent = 'Configurações de evolutivas';

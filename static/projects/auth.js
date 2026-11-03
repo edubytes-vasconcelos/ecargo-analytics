@@ -58,7 +58,7 @@ function openLocalAuth(mode = "login") {
 function renderProjectIdentity() {
   const root = document.querySelector("#projectAuth");
   root.replaceChildren();
-  document.querySelector("#openSettingsButton").hidden = !authState.user || authState.user.role !== "admin" || authState.user.mustChangePassword;
+  document.querySelector("#openSettingsButton").hidden = false;
   if (!authState.user) {
     const login = document.createElement("button"); login.type = "button"; login.textContent = "Entrar";
     login.addEventListener("click", () => openLocalAuth()); root.appendChild(login); return;
