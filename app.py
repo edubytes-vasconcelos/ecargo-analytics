@@ -29,6 +29,7 @@ except ModuleNotFoundError:
 
 import pandas as pd
 import project_auth
+import project_manager_agent
 
 
 ROOT = Path(__file__).resolve().parent
@@ -1772,6 +1773,21 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/base":
             self._send_json(base_payload())
             return
+        manager_status_match = re.fullmatch(r"/api/projects/([^/]+)/project-manager/status", path)
+        if manager_status_match:
+            project = _find_project(read_projects(), manager_status_match.group(1))
+            if project is None:
+                self._send_json({"error": "Projeto não encontrado."}, 404)
+                return
+            if not project_manager_agent.supports_project(project):
+                self._send_json({"error": "Assistente não disponível neste projeto."}, 404)
+                return
+            api_enabled = bool(os.environ.get("OPENAI_API_KEY", "").strip())
+            self._send_json({
+                "provider": "openai" if api_enabled else "interno",
+                "model": os.environ.get("OPENAI_MODEL", "gpt-6-luna").strip() if api_enabled else "",
+            })
+            return
         if path == "/api/projects":
             self._send_json(projects_payload())
             return
@@ -1857,6 +1873,43 @@ class Handler(BaseHTTPRequestHandler):
         path = self._route_path()
         if project_auth.handle_post(self, path, DATA_DIR, BASE_PATH):
             return
+        manager_match = re.fullmatch(r"/api/projects/([^/]+)/project-manager", path)
+        if manager_match:
+            try:
+                length = int(self.headers.get("Content-Length", "0") or "0")
+                if length > 24 * 1024:
+                    raise ValueError("A pergunta ou o histórico da conversa são muito extensos.")
+                payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+                if not isinstance(payload, dict):
+                    raise ValueError("Envie a pergunta em um objeto válido.")
+                question = str(payload.get("question") or "").strip()
+                if len(question) > 1000:
+                    raise ValueError("A pergunta deve ter até 1.000 caracteres.")
+                raw_history = payload.get("history") or []
+                if not isinstance(raw_history, list) or len(raw_history) > 10:
+                    raise ValueError("O histórico da conversa é inválido.")
+                history = []
+                for entry in raw_history:
+                    if not isinstance(entry, dict) or entry.get("role") not in {"user", "assistant"}:
+                        raise ValueError("O histórico da conversa é inválido.")
+                    content = entry.get("content")
+                    if not isinstance(content, str) or len(content) > 1000:
+                        raise ValueError("O histórico da conversa é inválido.")
+                    history.append({"role": entry["role"], "content": content})
+                if sum(len(entry["content"]) for entry in history) > 8000:
+                    raise ValueError("O histórico da conversa é muito extenso. Inicie uma nova conversa.")
+                project = _find_project(read_projects(), manager_match.group(1))
+                if project is None:
+                    self._send_json({"error": "Projeto não encontrado."}, 404)
+                    return
+                result = project_manager_agent.respond(project, question, history=history)
+                self._send_json(result)
+            except json.JSONDecodeError:
+                self._send_json({"error": "Não consegui interpretar a pergunta."}, 400)
+            except ValueError as exc:
+                self._send_json({"error": str(exc)}, 400)
+            return
+
         collaboration_match = re.fullmatch(r"/api/projects/([^/]+)/work-items/([^/]+)/(comments|evidence)", path)
         if collaboration_match:
             try:

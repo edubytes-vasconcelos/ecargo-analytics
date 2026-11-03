@@ -16,6 +16,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app.py .
 COPY project_auth.py .
+COPY project_manager_agent.py .
 COPY static ./static
 COPY scripts/manage_users.py ./scripts/manage_users.py
 

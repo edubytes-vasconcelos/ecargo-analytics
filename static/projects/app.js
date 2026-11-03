@@ -29,6 +29,15 @@ const notesModal = document.querySelector("#notesModal");
 const projectNotes = document.querySelector("#projectNotes");
 const closeNotesButton = document.querySelector("#closeNotesButton");
 const saveNotesButton = document.querySelector("#saveNotesButton");
+const managerAssistantPanel = document.querySelector("#projectManagerAssistant");
+const managerAssistantMessages = document.querySelector("#managerAssistantMessages");
+const managerAssistantForm = document.querySelector("#managerAssistantForm");
+const managerAssistantInput = document.querySelector("#managerAssistantInput");
+const managerAssistantSend = document.querySelector("#managerAssistantSend");
+let managerAssistantProjectId = null;
+let managerAssistantBusy = false;
+let managerAssistantHistory = [];
+let managerAssistantStatusPromise = Promise.resolve({ provider: "interno", model: "" });
 const studyEditModal = document.querySelector("#studyEditModal");
 const studyEditForm = document.querySelector("#studyEditForm");
 const studyEditName = document.querySelector("#studyEditName");
@@ -1640,6 +1649,9 @@ function renderProjectDetail(project) {
   node.querySelector("[data-action='update']").addEventListener("click", () => chooseScheduleUpdate(project.id));
   node.querySelector("[data-action='notes']").addEventListener("click", () => openNotes(project));
   node.querySelector("[data-action='add-work-item']").addEventListener("click", () => openWorkItemEditor(project));
+  const managerAssistantButton = node.querySelector("[data-action='project-manager']");
+  managerAssistantButton.hidden = !isProjectManagerAgentSupported(project);
+  managerAssistantButton.addEventListener("click", () => openProjectManagerAssistant(project));
 
   configureCollapsiblePanel(node, taskState, "schedule", "[data-field='scheduleBody']", "[data-action='toggle-schedule']");
   configureCollapsiblePanel(node, taskState, "work-items", "[data-field='workItemsBody']", "[data-action='toggle-work-items']");
@@ -1656,6 +1668,136 @@ function renderProjectDetail(project) {
 
   projectsEl.appendChild(node);
   requestAnimationFrame(syncKanbanViewport);
+}
+
+function isProjectManagerAgentSupported(project) {
+  const normalize = (value) => String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toLocaleLowerCase("pt-BR");
+  return normalize(project?.name) === normalize("Reforma Tributária - escopo Novas taxas e Novas adequações fiscais");
+}
+
+function openProjectManagerAssistant(project) {
+  if (!isProjectManagerAgentSupported(project)) return;
+  managerAssistantProjectId = project.id;
+  managerAssistantPanel.querySelector("[data-field='managerAssistantProject']").textContent = project.name;
+  managerAssistantPanel.hidden = false;
+  managerAssistantPanel.querySelector("[data-field='managerAssistantNotice']").textContent = "Verificando a configuração da análise do projeto…";
+  managerAssistantStatusPromise = fetch(`${appBasePath}/api/projects/${project.id}/project-manager/status`)
+    .then(async (response) => {
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || "Não consegui consultar a configuração da análise.");
+      setManagerAssistantMode(body.provider, body.model);
+      return body;
+    })
+    .catch((error) => {
+      setManagerAssistantMode("interno", "", error.message);
+      return { provider: "interno", model: "" };
+    });
+  if (!managerAssistantMessages.childElementCount) {
+    appendManagerAssistantMessage("assistant", "Posso preparar o status do projeto, apontar riscos e atrasos, identificar responsáveis e próximas ações, montar uma pauta e redigir cobranças para revisão.");
+  }
+  managerAssistantInput.focus();
+}
+
+function setManagerAssistantMode(provider, model = "", warning = "") {
+  const notice = managerAssistantPanel.querySelector("[data-field='managerAssistantNotice']");
+  const footnote = managerAssistantPanel.querySelector("[data-field='managerAssistantFootnote']");
+  if (provider === "openai") {
+    notice.textContent = `OpenAI ativo (${model || "modelo configurado"}). A pergunta, o histórico recente e os campos do projeto serão enviados à API OpenAI para gerar a resposta.`;
+    footnote.textContent = "As respostas desta integração usam store:false. A retenção padrão de logs de segurança da OpenAI pode chegar a 30 dias.";
+  } else if (provider === "openai-fallback") {
+    notice.textContent = warning || "A consulta foi enviada à OpenAI, mas não recebi uma resposta. O conteúdo foi analisado internamente como alternativa.";
+    footnote.textContent = `Modelo configurado: ${model || "OpenAI"}. Revise as respostas antes de compartilhar.`;
+  } else {
+    notice.textContent = warning || "Modo interno ativo. Perguntas e contexto não são enviados à OpenAI; as respostas usam regras e dados cadastrados no painel.";
+    footnote.textContent = "Cobranças permanecem como rascunhos até você revisar e enviar na conversa da atividade.";
+  }
+}
+
+function appendManagerAssistantMessage(role, text, suggestions = [], state = "") {
+  const message = document.createElement("article");
+  message.className = `manager-assistant-message ${role}${state ? ` ${state}` : ""}`;
+  const content = document.createElement("div");
+  content.className = "manager-assistant-message-content";
+  if (state === "error") {
+    content.textContent = text;
+  } else {
+    content.innerHTML = markdownBlock(text);
+  }
+  message.append(content);
+  if (suggestions.length) {
+    const actions = document.createElement("div");
+    actions.className = "manager-assistant-suggestions";
+    suggestions.forEach((suggestion) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "manager-assistant-suggestion";
+      button.dataset.managerWorkItem = suggestion.workItemId;
+      const title = document.createElement("span");
+      title.textContent = suggestion.label || "Preparar cobrança";
+      const context = document.createElement("small");
+      context.textContent = suggestion.workItemTitle;
+      button.append(title, context);
+      button.addEventListener("click", () => openManagerReminder(suggestion));
+      actions.append(button);
+    });
+    message.append(actions);
+  }
+  managerAssistantMessages.append(message);
+  managerAssistantMessages.scrollTop = managerAssistantMessages.scrollHeight;
+  return message;
+}
+
+async function askProjectManager(question) {
+  if (!managerAssistantProjectId || managerAssistantBusy) return;
+  const prompt = String(question || "").trim();
+  if (!prompt) return;
+  const history = managerAssistantHistory.slice(-10);
+  managerAssistantHistory.push({ role: "user", content: prompt });
+  appendManagerAssistantMessage("user", prompt);
+  managerAssistantInput.value = "";
+  managerAssistantBusy = true;
+  managerAssistantSend.disabled = true;
+  managerAssistantSend.textContent = "Analisando…";
+  managerAssistantPanel.setAttribute("aria-busy", "true");
+  const pending = appendManagerAssistantMessage("assistant", "Lendo as atividades do projeto…", [], "pending");
+  try {
+    await managerAssistantStatusPromise;
+    const response = await fetch(`${appBasePath}/api/projects/${managerAssistantProjectId}/project-manager`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question: prompt, history }),
+    });
+    const body = await response.json().catch(() => ({}));
+    pending.remove();
+    if (!response.ok) throw new Error(body.error || "Não foi possível analisar o projeto.");
+    setManagerAssistantMode(body.provider, body.model, body.warning);
+    appendManagerAssistantMessage("assistant", body.answer, body.suggestions || []);
+    managerAssistantHistory.push({ role: "assistant", content: body.answer });
+  } catch (error) {
+    pending.remove();
+    appendManagerAssistantMessage("assistant", error.message || "Não foi possível analisar o projeto.", [], "error");
+    managerAssistantHistory.push({ role: "assistant", content: error.message || "Não foi possível analisar o projeto." });
+  } finally {
+    managerAssistantBusy = false;
+    managerAssistantSend.disabled = false;
+    managerAssistantSend.textContent = "Perguntar";
+    managerAssistantPanel.removeAttribute("aria-busy");
+  }
+}
+
+function openManagerReminder(suggestion) {
+  const project = projectsCache.find((item) => item.id === managerAssistantProjectId);
+  const item = (project?.workItems || []).find((candidate) => candidate.id === suggestion.workItemId);
+  if (!project || !item) return;
+  openWorkItemEditor(project, item);
+  document.querySelector('[data-editor-tab="conversation"]')?.click();
+  const comment = document.querySelector("#commentText");
+  if (window.prefillProjectManagerMention) {
+    window.prefillProjectManagerMention(suggestion.assigneeId, suggestion.text);
+  } else {
+    comment.value = suggestion.text.replace("{{responsavel}}", suggestion.assignee || "responsável");
+  }
+  comment.focus();
 }
 
 function configureCollapsiblePanel(root, state, key, bodySelector, buttonSelector) {
@@ -2426,12 +2568,15 @@ function renderCurrentView() {
 function openProject(id) {
   const state = projectUiState.get(id);
   if (state) state.workItemView = getStoredWorkItemView();
+  managerAssistantPanel.hidden = true;
   selectedProjectId = id;
   localStorage.setItem("selectedProjectId", id);
   renderCurrentView();
 }
 
 function showDashboard() {
+  managerAssistantPanel.hidden = true;
+  managerAssistantHistory = [];
   selectedProjectId = null;
   localStorage.removeItem("selectedProjectId");
   renderCurrentView();
@@ -3021,6 +3166,17 @@ copyReportButton.addEventListener("click", async () => {
     copyReportButton.title = "Copiar status report";
     copyReportButton.setAttribute("aria-label", "Copiar status report");
   }, 1600);
+});
+managerAssistantPanel.querySelector("[data-action='close-manager-assistant']").addEventListener("click", () => {
+  if (managerAssistantBusy) return;
+  managerAssistantPanel.hidden = true;
+});
+managerAssistantForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  askProjectManager(managerAssistantInput.value);
+});
+managerAssistantPanel.querySelectorAll("[data-manager-prompt]").forEach((button) => {
+  button.addEventListener("click", () => askProjectManager(button.dataset.managerPrompt));
 });
 setupRichDescriptionEditor();
 setupMarkdownEditors();

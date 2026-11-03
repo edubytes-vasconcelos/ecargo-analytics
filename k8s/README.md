@@ -44,6 +44,12 @@ kubectl -n hml-signa-ecargo create secret generic ecargo-analytics-secrets \
 
 As keys `MS_GRAPH_*` sao opcionais no manifesto. Sem elas, o upload manual continua funcionando, mas a leitura automatica de arquivos do SharePoint fica indisponivel.
 
+### Assistente de gestão com OpenAI
+
+O assistente usa análise interna quando `OPENAI_API_KEY` não estiver configurada. Para habilitar o modelo no HML, crie no namespace `hml-signa-ecargo` um Secret chamado `project-manager-openai`, com uma chave `OPENAI_API_KEY` contendo a chave da API. O Deployment lê o Secret opcionalmente; após criar ou atualizar o Secret, reinicie o Deployment para carregar a variável no pod. O modelo padrão é `gpt-6-luna` e pode ser substituído por `OPENAI_MODEL` no Deployment.
+
+Não inclua a chave no Git ou em mensagens. A integração usa a Responses API com `store:false`; ainda assim, os controles padrão de segurança da API podem reter logs por até 30 dias. Consulte https://developers.openai.com/api/docs/guides/your-data.
+
 ## Deploy pelo GitHub Actions
 
 O deploy automatico roda pelo GitHub Actions:

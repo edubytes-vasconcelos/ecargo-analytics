@@ -88,6 +88,15 @@
   });
   document.addEventListener('pointerdown',event=>{if(!event.target.closest('.mention-editor')) hide();},true);
   window.getCommentMentionIds = () => {syncRecipients(); return [...selected.keys()];};
+  window.prefillProjectManagerMention = (userId, text) => {
+    selected.clear();
+    const user = authState.users.find(candidate => candidate.active && candidate.id === userId);
+    const token = user ? tokenFor(user) : '';
+    input.value = String(text || '').replace('{{responsavel}}', token || 'responsável');
+    if (user && token) selected.set(user.id, token);
+    input.dispatchEvent(new Event('input',{bubbles:true}));
+    syncRecipients();
+  };
   window.syncCommentMentions = syncRecipients;
   window.resetCommentMentions = () => {selected.clear(); hide(); syncRecipients();};
 })();

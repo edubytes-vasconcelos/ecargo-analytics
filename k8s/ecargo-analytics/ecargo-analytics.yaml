@@ -60,6 +60,14 @@ spec:
               value: "${SMTP_FROM}"
             - name: APP_PUBLIC_URL
               value: "${APP_PUBLIC_URL}"
+            - name: OPENAI_MODEL
+              value: "gpt-6-luna"
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: project-manager-openai
+                  key: OPENAI_API_KEY
+                  optional: true
             - name: SYNC_INTERVAL_SECONDS
               value: "${SYNC_INTERVAL_SECONDS}"
             - name: SYNC_LOOKBACK_HOURS

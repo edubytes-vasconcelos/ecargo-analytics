@@ -6,7 +6,7 @@
     <title>Portal E-Cargo | Evolutivas</title>
     <script src="__BASE_PATH__/projects/theme.js?v=1"></script>
     <link rel="stylesheet" href="__BASE_PATH__/projects/styles.css?v=35" />
-    <link rel="stylesheet" href="__BASE_PATH__/projects/workspace.css?v=15" />
+    <link rel="stylesheet" href="__BASE_PATH__/projects/workspace.css?v=16" />
   </head>
   <body>
     <header class="topbar">
@@ -111,6 +111,7 @@
             <p data-field="folder"></p>
           </div>
           <div class="header-actions">
+            <button type="button" data-action="project-manager" class="manager-assistant-trigger" hidden>Assistente de gestão</button>
             <button type="button" data-action="report" title="Gerar e-mail de status">Gerar status report</button>
             <button type="button" data-action="update" title="Atualizar cronograma da evolutiva">Atualizar cronograma</button>
             <button type="button" data-action="notes" title="Adicionar informações da evolutiva">Informações</button>
@@ -195,6 +196,30 @@
       </article>
     </template>
 
+    <aside id="projectManagerAssistant" class="project-manager-assistant" aria-labelledby="managerAssistantTitle" aria-live="polite" hidden>
+      <div class="manager-assistant-header">
+        <div>
+          <h2 id="managerAssistantTitle">Assistente de gestão</h2>
+          <p data-field="managerAssistantProject"></p>
+        </div>
+        <button type="button" data-action="close-manager-assistant" aria-label="Fechar assistente">Fechar</button>
+      </div>
+      <div class="manager-assistant-notice" data-field="managerAssistantNotice">Verificando a configuração da análise do projeto…</div>
+      <div id="managerAssistantMessages" class="manager-assistant-messages" role="log" aria-live="polite" aria-relevant="additions text"></div>
+      <div class="manager-assistant-prompts" aria-label="Perguntas sugeridas">
+        <button type="button" data-manager-prompt="status">Preparar status</button>
+        <button type="button" data-manager-prompt="riscos e atrasos">Ver riscos</button>
+        <button type="button" data-manager-prompt="quem preciso cobrar?">Preparar cobranças</button>
+        <button type="button" data-manager-prompt="distribuição de carga por responsável">Distribuição</button>
+        <button type="button" data-manager-prompt="montar pauta para reunião">Montar pauta</button>
+      </div>
+      <form id="managerAssistantForm" class="manager-assistant-compose">
+        <textarea id="managerAssistantInput" rows="2" maxlength="1000" aria-label="Pergunte ao assistente de gestão" placeholder="Pergunte sobre status, riscos, responsáveis..."></textarea>
+        <button id="managerAssistantSend" type="submit">Perguntar</button>
+      </form>
+      <p class="manager-assistant-footnote" data-field="managerAssistantFootnote">Cobranças permanecem como rascunhos até você revisar e enviar na conversa da atividade.</p>
+    </aside>
+
     <div id="reportModal" class="modal" hidden>
       <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="reportTitle">
         <div class="modal-header">
@@ -263,6 +288,14 @@
               <li>Abra a evolutiva e clique em Gerar status report.</li>
               <li>Revise o texto gerado e copie para enviar por e-mail.</li>
               <li>Use Informações para registrar observações internas da evolutiva.</li>
+            </ol>
+          </section>
+          <section>
+            <h3>Assistente de gestão da Reforma Tributária</h3>
+            <ol>
+              <li>No projeto Reforma Tributária - escopo Novas taxas e Novas adequações fiscais, selecione Assistente de gestão para consultar status, riscos, cobranças, responsáveis, próximas ações ou pauta de reunião.</li>
+              <li>Sem uma chave OpenAI configurada, as respostas usam regras internas. Com a chave ativa, a pergunta, o histórico recente e campos dos cards são enviados à API OpenAI; o assistente não altera cards nem envia mensagens automaticamente.</li>
+              <li>Para uma cobrança, selecione Preparar cobrança. Revise o rascunho na conversa da atividade, confirme a pessoa mencionada e clique em Enviar mensagem somente quando estiver pronto.</li>
             </ol>
           </section>
           <section>
@@ -512,8 +545,8 @@
     <div id="notificationModal" class="modal" hidden><div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="notificationTitle"><div class="modal-header"><h2 id="notificationTitle">Notificações</h2><button id="closeNotifications" type="button">Fechar</button></div><div id="notificationList"></div></div></div>
     <script src="__BASE_PATH__/projects/auth.js?v=4"></script>
     <script src="__BASE_PATH__/projects/management.js?v=8"></script>
-    <script src="__BASE_PATH__/projects/app.js?v=60"></script>
-    <script src="__BASE_PATH__/projects/mentions.js?v=1"></script>
+    <script src="__BASE_PATH__/projects/app.js?v=61"></script>
+    <script src="__BASE_PATH__/projects/mentions.js?v=2"></script>
     <script src="__BASE_PATH__/projects/workspace-ui.js?v=5"></script>
   </body>
 </html>

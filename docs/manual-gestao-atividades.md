@@ -74,7 +74,15 @@ Abra **Histórico** para consultar alterações registradas na atividade. Use o 
 
 No cabeçalho, selecione o ícone de lua para ativar o modo escuro. Selecione o ícone de sol para voltar ao modo claro. A escolha fica salva neste navegador e não altera a aparência dos outros usuários.
 
-## 9. Boas práticas por perfil
+## 9. Usar o assistente de gestão do projeto
+
+No projeto **Reforma Tributária - escopo Novas taxas e Novas adequações fiscais**, selecione **Assistente de gestão**. Use os atalhos ou escreva uma pergunta sobre status, riscos e atrasos, cobranças, responsáveis, distribuição de trabalho, próximas ações ou pauta de reunião. Sem uma chave OpenAI configurada, o assistente usa regras internas sobre os cards. Com a chave configurada, envia a pergunta, o histórico recente e campos das atividades para a API OpenAI e usa o modelo definido no ambiente; a conversa não é salva pelo app. A API aplica seus próprios controles de retenção: consulte [Controles de dados da OpenAI](https://developers.openai.com/api/docs/guides/your-data). O assistente não altera cards automaticamente.
+
+Para preparar uma cobrança, pergunte **Quem preciso cobrar?**. O assistente sugere atividades vencidas ou com prazo nos próximos sete dias que tenham responsável. Selecione **Preparar cobrança** para abrir a conversa daquela atividade com uma mensagem em rascunho. Revise o texto, confirme a pessoa mencionada e selecione **Enviar mensagem** quando quiser enviar. Fechar a conversa sem enviar descarta o rascunho.
+
+Use o resumo e a pauta como apoio para reuniões. Se uma atividade estiver sem responsável, prazo ou próxima ação, atualize esses dados no card antes de tomar uma decisão. As recomendações refletem somente o que está preenchido no painel.
+
+## 10. Boas práticas por perfil
 
 - **Gerente de projeto:** acompanhe responsáveis, prazos e bloqueios; use filtros de atenção para preparar alinhamentos.
 - **Desenvolvedor:** registre decisões e próximas ações na atividade; mantenha o bug vinculado à Definição Técnica e atualize sua etapa.
