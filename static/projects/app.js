@@ -1240,7 +1240,7 @@ function renderWorkItems(root, project) {
   summary.querySelector("[data-clear-attention]")?.addEventListener("click", () => { state.attentionFilter = null; renderProjectDetail(project); });
 
   const viewSwitch = root.querySelector("[data-field='workItemViewSwitch']");
-  const viewOptions = [["list", "Lista"], ["status", "Por status"]];
+  const viewOptions = [["list", "Lista"], ["status", "Por etapa"]];
   if (state.workItemFilter === "bug") viewOptions.push(["grouped", "Por definição"]);
   if (state.workItemFilter !== "archived") viewOptions.push(["kanban", "Kanban"]);
   if (!viewOptions.some(([value]) => value === state.workItemView)) state.workItemView = "list";
@@ -1289,14 +1289,14 @@ function renderWorkItems(root, project) {
   bindWorkItemActions(list, allItems, project);
 }
 
-function workItemRowHtml(item, depth, allItems, project) {
+function workItemRowHtml(item, depth, allItems, project, showStage = true) {
   const parent = allItems.find((candidate) => candidate.id === item.parentId);
   const childCount = allItems.filter((candidate) => candidate.parentId === item.id).length;
   return `<article class="work-item-row type-${item.type} tree-depth-${depth}" style="--tree-depth:${depth}" data-work-item-id="${escapeHtml(item.id)}">
     ${workItemMenuHtml(item)}
     <div class="work-item-kind">${escapeHtml(workItemTypes[item.type] || item.type)}</div>
     <div class="work-item-main">
-      <div class="work-item-title-line"><h4>${escapeHtml(item.title)}</h4>${statusPillHtml(project, item)}</div>
+      <div class="work-item-title-line"><h4>${escapeHtml(item.title)}</h4>${showStage ? statusPillHtml(project, item) : ""}</div>
       ${parent ? `<p class="work-item-parent">Vinculada a: ${escapeHtml(parent.title)}</p>` : ""}
       ${item.description ? `<div class="work-item-description markdown-content">${markdownBlock(item.description)}</div>` : ""}
       ${workItemManagementHtml(item)}
@@ -1308,25 +1308,19 @@ function workItemRowHtml(item, depth, allItems, project) {
 
 function renderWorkItemsByStatus(container, visible, allItems, project) {
   const groups = new Map();
-  visible.forEach((item) => {
-    if (!groups.has(item.status)) groups.set(item.status, []);
-    groups.get(item.status).push(item);
+  visible.forEach(item => {
+    const stage = workItemStage(item);
+    if (!groups.has(stage)) groups.set(stage, []);
+    groups.get(stage).push(item);
   });
-  const stageRank = { backlog: 0, progress: 1, blocked: 2, done: 3 };
-  const entries = [...groups.entries()].sort((a, b) => {
-    const rankA = stageRank[workItemStage({ status: a[0] })] ?? 4;
-    const rankB = stageRank[workItemStage({ status: b[0] })] ?? 4;
-    return rankA !== rankB ? rankA - rankB : a[0].localeCompare(b[0]);
-  });
+  const order = kanbanColumnOrder(project);
+  const rank = stage => { const index = order.indexOf(stage); return index < 0 ? order.length : index; };
+  const entries = [...groups.entries()].sort((a,b) => rank(a[0]) - rank(b[0]));
   container.className = "work-item-status-groups";
-  container.innerHTML = entries.map(([status, items]) => {
-    const label = workItemStatusLabel(project, items[0]);
-    const stage = workItemStage(items[0]);
-    return `<section class="work-item-status-group stage-${stage}">
-      <div class="work-item-status-group-head"><h4>${escapeHtml(label)}</h4><span>${items.length}</span></div>
-      <div class="work-item-status-group-body">${items.map((item) => workItemRowHtml(item, 0, allItems, project)).join("")}</div>
-    </section>`;
-  }).join("") || `<p class="hint">Nenhuma atividade neste filtro.</p>`;
+  container.innerHTML = entries.map(([stage, items]) => `<section class="work-item-status-group stage-${escapeHtml(stage)}">
+    <div class="work-item-status-group-head"><h4>${escapeHtml(workItemStatusLabel(project, items[0]))}</h4><span>${items.length}</span></div>
+    <div class="work-item-status-group-body">${items.map(item => workItemRowHtml(item, 0, allItems, project, false)).join("")}</div>
+  </section>`).join("") || `<p class="hint">Nenhuma atividade neste filtro.</p>`;
   bindWorkItemActions(container, allItems, project);
 }
 
@@ -1390,21 +1384,40 @@ function workItemStage(item) {
 }
 
 function workItemStatusLabel(project, item) {
-  return workItemStatuses[item.type]?.[item.status]
-    || (project.workItemColumns || []).find((column) => column.id === item.status)?.title
+  const stage = workItemStage(item);
+  return (project.workItemColumns || []).find(column => column.id === stage)?.title
+    || kanbanBuiltInColumns.find(column => column.id === stage)?.title
+    || workItemStatuses[item.type]?.[item.status]
     || item.status;
 }
 
-function workItemStatusOptions(project, item) {
-  const base = workItemStatuses[item.type] || {};
-  const custom = Object.fromEntries((project.workItemColumns || []).map((column) => [column.id, column.title]));
-  return { ...base, ...custom };
+function workItemWorkflowColumns(project, item = null, includeCurrent = true) {
+  const custom = (project.workItemColumns || []).filter(column => !column.archived);
+  const byId = new Map([...kanbanBuiltInColumns, ...custom].map(column => [column.id,column]));
+  const activeStages = new Set((project.workItems || []).filter(candidate => !candidate.archived).map(workItemStage));
+  const currentStage = includeCurrent && item?.status ? workItemStage(item) : null;
+  const columns = kanbanColumnOrder(project).map(id => byId.get(id)).filter(Boolean).filter(column =>
+    column.id.startsWith("custom-") || !custom.length || activeStages.has(column.id) || ["blocked","done"].includes(column.id) || column.id === currentStage);
+  if (currentStage && !columns.some(column => column.id === currentStage)) {
+    const current = (project.workItemColumns || []).find(column => column.id === currentStage);
+    if (current) columns.push({...current,title:current.archived ? `${current.title} (lista arquivada)` : current.title});
+  }
+  return columns;
+}
+
+function workItemStatusOptions(project, item, includeCurrent = true) {
+  const currentStage = workItemStage(item);
+  return Object.fromEntries(workItemWorkflowColumns(project, item, includeCurrent).map(column => {
+    const preserveValue = column.id === currentStage && Boolean(workItemStatuses[item.type]?.[item.status]);
+    const value = preserveValue ? item.status : workItemStatusForStage(item.type, column.id);
+    return [value,column.title];
+  }).filter(([value]) => value));
 }
 
 function statusPillHtml(project, item) {
   const options = workItemStatusOptions(project, item);
   return `<details class="status-pill-menu">
-    <summary class="work-status status-${escapeHtml(item.status)}">${escapeHtml(workItemStatusLabel(project, item))}</summary>
+    <summary class="work-status status-${escapeHtml(item.status)}" title="Mover para outra etapa" aria-label="Etapa: ${escapeHtml(workItemStatusLabel(project, item))}. Mover para outra etapa">${escapeHtml(workItemStatusLabel(project, item))}</summary>
     <div class="status-pill-popover">
       ${Object.entries(options).map(([value, label]) => `<button type="button" class="${value === item.status ? "active" : ""}" data-status="${escapeHtml(value)}">${escapeHtml(label)}</button>`).join("")}
     </div>
@@ -1416,6 +1429,7 @@ function workItemMenuHtml(item) {
     <summary title="Ações" aria-label="Ações">•••</summary>
     <div class="work-item-menu-popover">
       <button type="button" data-action="edit-work-item">Editar</button>
+      ${!item.archived ? '<button type="button" data-action="move-work-item">Mover para…</button>' : ""}
       <button type="button" data-action="archive-work-item">${item.archived ? "Restaurar" : "Arquivar"}</button>
       <button type="button" class="danger-link" data-action="delete-work-item">Excluir</button>
     </div>
@@ -1504,7 +1518,7 @@ function renderWorkItemKanban(container, visible, allItems, project, state) {
   const builtInById = new Map(kanbanBuiltInColumns.map((column) => [column.id, column]));
   const columns = kanbanColumnOrder(project).map((id) => customById.has(id)
     ? { ...customById.get(id), custom: true }
-    : { ...builtInById.get(id), custom: false });
+    : { ...builtInById.get(id), custom: false }).filter(column => column.custom || !customById.size || visible.some(item => workItemStage(item) === column.id));
   const archivedColumns = customColumns.filter((column) => column.archived);
   container.className = "work-item-kanban";
   container.innerHTML = columns.map((column) => {
@@ -1520,7 +1534,6 @@ function renderWorkItemKanban(container, visible, allItems, project, state) {
             <span class="kanban-kind">${escapeHtml(workItemTypes[item.type] || item.type)}</span>
             <strong>${escapeHtml(item.title)}</strong>
           </button>
-          ${statusPillHtml(project, item)}
           ${workItemManagementHtml(item)}
           ${parent ? `<small class="kanban-card-parent">${escapeHtml(parent.title)}</small>` : ""}
           ${childCount ? `<small class="kanban-card-children">${childCount} vinculada${childCount > 1 ? "s" : ""}</small>` : ""}
@@ -1709,6 +1722,13 @@ async function updateWorkItemStatus(projectId, item, status) {
 }
 
 function bindWorkItemActions(container, allItems, project) {
+  container.querySelectorAll("[data-action='move-work-item']").forEach(button => button.addEventListener("click", () => {
+    const id = button.closest("[data-work-item-id]").dataset.workItemId;
+    const item = allItems.find(candidate => candidate.id === id);
+    if (!item) return;
+    openWorkItemEditor(project, item);
+    workItemStatus.focus();
+  }));
   container.querySelectorAll("[data-action='edit-work-item']").forEach((button) => button.addEventListener("click", () => {
     const id = button.closest("[data-work-item-id]").dataset.workItemId;
     openWorkItemEditor(project, allItems.find((item) => item.id === id));
@@ -1771,11 +1791,10 @@ async function deleteWorkItem(projectId, item, allItems) {
 
 function updateWorkItemFormOptions(project, selectedParentId = "") {
   const type = workItemType.value;
-  const statuses = {
-    ...(workItemStatuses[type] || {}),
-    ...Object.fromEntries((project.workItemColumns || []).map((column) => [column.id, column.title])),
-  };
-  const previousStatus = workItemStatus.value;
+  const editingItem = (project.workItems || []).find(item => item.id === editingWorkItemId);
+  const previousStatus = editingItem?.status || (pendingWorkItemStage ? workItemStatusForStage(type, pendingWorkItemStage) : workItemStatus.value);
+  const sample = {type,status:previousStatus || Object.keys(workItemStatuses[type] || {})[0]};
+  const statuses = workItemStatusOptions(project, sample, Boolean(editingItem || pendingWorkItemStage));
   workItemStatus.innerHTML = Object.entries(statuses).map(([value, label]) => `<option value="${value}">${label}</option>`).join("");
   if (statuses[previousStatus]) workItemStatus.value = previousStatus;
   const parentType = type === "technical-definition" ? "requirement" : type === "bug" ? "technical-definition" : null;

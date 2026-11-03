@@ -4,7 +4,7 @@ let evidenceDraft = [];
 let commentReplyTo = null;
 let collaborationBusy = false;
 const managementPriorities = { low: "Baixa", normal: "Normal", high: "Alta", urgent: "Urgente" };
-const managementFields = { title: "Título", status: "Status", description: "Descrição", parentId: "Vínculo", assignee: "Responsável", priority: "Prioridade", dueDate: "Prazo", nextAction: "Próxima ação", blockedReason: "Bloqueio", acceptanceCriteria: "Critérios de conclusão", checklist: "Checklist", archived: "Arquivamento" };
+const managementFields = { title: "Título", status: "Etapa", description: "Descrição", parentId: "Vínculo", assignee: "Responsável", priority: "Prioridade", dueDate: "Prazo", nextAction: "Próxima ação", blockedReason: "Bloqueio", acceptanceCriteria: "Critérios de conclusão", checklist: "Checklist", archived: "Arquivamento" };
 let dashboardAttentionFilter = "overdue";
 
 function renderManagementOverview(projects) {
@@ -128,7 +128,7 @@ function renderCollaboration(item) {
 
 function historyValue(value, field) {
   if (field === 'priority') return managementPriorities[value] || 'Normal';
-  if (field === 'status') return Object.values(workItemStatuses).map(statuses => statuses[value]).find(Boolean) || value || 'Não informado';
+  if (field === 'status') { const project = projectsCache.find(project => project.id === workItemProjectId); return project && value ? workItemStatusLabel(project, {type:collaborationItem()?.type || 'requirement',status:value}) : 'Não informado'; }
   if (field === 'parentId' && value) return projectsCache.find(project => project.id === workItemProjectId)?.workItems?.find(item => item.id === value)?.title || 'Atividade anterior';
   if (field === 'archived') return value ? 'Arquivada' : 'Ativa';
   if (value == null || value === "") return "Não informado";
