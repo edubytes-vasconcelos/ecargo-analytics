@@ -51,11 +51,14 @@ const workItemParentLabel = document.querySelector("#workItemParentLabel");
 const workItemParent = document.querySelector("#workItemParent");
 const workItemTitle = document.querySelector("#workItemTitle");
 const workItemDescription = document.querySelector("#workItemDescription");
+const sourceCodeLinksList = document.querySelector("#sourceCodeLinksList");
+const addSourceCodeLinkButton = document.querySelector("#addSourceCodeLink");
 const closeWorkItemButton = document.querySelector("#closeWorkItemButton");
 const deleteWorkItemButton = document.querySelector("#deleteWorkItemButton");
 const projectUiState = new Map();
 const appBasePath = document.documentElement.dataset.basePath || "";
 const WORK_ITEM_VIEW_STORAGE_KEY = "projects:workItemView";
+let editorSourceCodeLinks = [];
 
 function getStoredWorkItemView() {
   try {
@@ -1842,6 +1845,7 @@ async function deleteWorkItem(projectId, item, allItems) {
 function updateWorkItemFormOptions(project, selectedParentId = "") {
   const type = workItemType.value;
   document.querySelector('#bugReportFields').hidden = type !== 'bug';
+  document.querySelector('#technicalArtifactsFields').hidden = type !== 'technical-definition';
   const editingItem = (project.workItems || []).find(item => item.id === editingWorkItemId);
   const previousStatus = editingItem?.status || (pendingWorkItemStage ? workItemStatusForStage(type, pendingWorkItemStage) : workItemStatus.value);
   const sample = {type,status:previousStatus || Object.keys(workItemStatuses[type] || {})[0]};
@@ -1856,6 +1860,45 @@ function updateWorkItemFormOptions(project, selectedParentId = "") {
   workItemParent.innerHTML = `<option value="">Selecione</option>${parents.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.title)}</option>`).join("")}`;
   workItemParent.value = selectedParentId || "";
 }
+
+const sourceCodeTypeLabels = { frontend: "Frontend", backend: "Backend", service: "Serviço" };
+
+function renderEditorSourceCodeLinks() {
+  sourceCodeLinksList.innerHTML = editorSourceCodeLinks.map((entry, index) => {
+    const typesUsedElsewhere = new Set(editorSourceCodeLinks.filter((_, otherIndex) => otherIndex !== index).map((other) => other.type).filter(Boolean));
+    return `<div class="source-code-link-row">
+      <label>Tipo<select data-source-type="${index}" aria-label="Tipo do código ${index + 1}"><option value="">Selecione</option>${Object.entries(sourceCodeTypeLabels).map(([value, label]) => `<option value="${value}" ${entry.type === value ? "selected" : ""} ${typesUsedElsewhere.has(value) ? "disabled" : ""}>${label}</option>`).join("")}</select></label>
+      <label>Repositório ou caminho<input type="url" data-source-url="${index}" aria-label="Link do código ${entry.type ? sourceCodeTypeLabels[entry.type] : index + 1}" placeholder="https://github.com/organizacao/repositorio/..." value="${escapeHtml(entry.url || "")}" /></label>
+      <button type="button" class="source-code-remove" data-remove-source="${index}" aria-label="Remover link de código ${index + 1}">Remover</button>
+    </div>`;
+  }).join("");
+  addSourceCodeLinkButton.disabled = editorSourceCodeLinks.length >= 3;
+  addSourceCodeLinkButton.textContent = `+ Adicionar código (${editorSourceCodeLinks.length}/3)`;
+}
+
+addSourceCodeLinkButton.addEventListener("click", () => {
+  if (editorSourceCodeLinks.length >= 3) return;
+  editorSourceCodeLinks.push({ type: "", url: "" });
+  renderEditorSourceCodeLinks();
+  sourceCodeLinksList.querySelector(`[data-source-type="${editorSourceCodeLinks.length - 1}"]`)?.focus();
+});
+sourceCodeLinksList.addEventListener("input", (event) => {
+  const index = Number(event.target.dataset.sourceUrl);
+  if (Number.isInteger(index) && editorSourceCodeLinks[index]) editorSourceCodeLinks[index].url = event.target.value;
+});
+sourceCodeLinksList.addEventListener("change", (event) => {
+  const index = Number(event.target.dataset.sourceType);
+  if (!Number.isInteger(index) || !editorSourceCodeLinks[index]) return;
+  editorSourceCodeLinks[index].type = event.target.value;
+  renderEditorSourceCodeLinks();
+  sourceCodeLinksList.querySelector(`[data-source-type="${index}"]`)?.focus();
+});
+sourceCodeLinksList.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-remove-source]");
+  if (!button) return;
+  editorSourceCodeLinks.splice(Number(button.dataset.removeSource), 1);
+  renderEditorSourceCodeLinks();
+});
 
 function openWorkItemEditor(project, item = null, stage = null, preferredType = null) {
   workItemProjectId = project.id;
@@ -1875,7 +1918,8 @@ function openWorkItemEditor(project, item = null, stage = null, preferredType = 
   document.querySelector('#workItemReproductionSteps').value = item?.reproductionSteps || '';
   document.querySelector('#workItemExpectedResult').value = item?.expectedResult || '';
   document.querySelector('#workItemActualResult').value = item?.actualResult || '';
-  document.querySelector('#workItemSourcePath').value = item?.sourcePath || '';
+  editorSourceCodeLinks = structuredClone(item?.sourceCodeLinks || (item?.sourcePath ? [{ type: "", url: item.sourcePath }] : []));
+  renderEditorSourceCodeLinks();
   document.querySelector('#workItemDeploymentPath').value = item?.deploymentPath || '';
   document.querySelector('#workItemBlocked').checked = Boolean(item?.blocked);
   for (const field of ["assignee", "priority", "dueDate", "nextAction", "blockedReason", "acceptanceCriteria"]) {
@@ -2401,6 +2445,17 @@ workItemForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (collaborationBusy) return;
   if (!workItemProjectId) return;
+  const sourceCodeLinks = editorSourceCodeLinks.map(({ type, url }) => ({ type, url: url.trim() }));
+  if (workItemType.value === "technical-definition") {
+    if (sourceCodeLinks.some((entry) => !entry.type || !entry.url)) {
+      alert("Preencha o tipo e o link em cada registro de código adicionado.");
+      return;
+    }
+    if (new Set(sourceCodeLinks.map((entry) => entry.type)).size !== sourceCodeLinks.length) {
+      alert("Use no máximo um registro para cada tipo: Frontend, Backend e Serviço.");
+      return;
+    }
+  }
   const payload = {
     type: workItemType.value,
     status: workItemStatus.value,
@@ -2411,7 +2466,7 @@ workItemForm.addEventListener("submit", async (event) => {
     reproductionSteps: document.querySelector('#workItemReproductionSteps').value.trim(),
     expectedResult: document.querySelector('#workItemExpectedResult').value.trim(),
     actualResult: document.querySelector('#workItemActualResult').value.trim(),
-    sourcePath: document.querySelector('#workItemSourcePath').value.trim(),
+    sourceCodeLinks,
     deploymentPath: document.querySelector('#workItemDeploymentPath').value.trim(),
     parentId: workItemParentField.hidden ? null : workItemParent.value,
     blocked: document.querySelector('#workItemBlocked').checked,

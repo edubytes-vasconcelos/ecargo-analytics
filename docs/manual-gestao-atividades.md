@@ -18,10 +18,11 @@ Este guia mostra como registrar e acompanhar atividades de um projeto no painel,
 2. Informe um título curto que descreva o resultado esperado.
 3. Escolha o tipo: **Análise de Requisitos**, **Definição Técnica** ou **Bug**.
 4. Escreva a descrição. Para requisitos, registre contexto e critérios de aceite. Para bugs, informe o comportamento observado, o esperado e os passos para reproduzir.
-5. Defina a **Etapa**, o **Responsável**, a **Prioridade** e, quando aplicável, o **Prazo** e a **Próxima ação**.
-6. Use **Vincular a** para relacionar uma Definição Técnica à Análise de Requisitos correspondente ou um bug à Definição Técnica afetada.
-7. Registre **Critérios de conclusão** e inclua itens no **Checklist** quando a atividade exigir etapas menores.
-8. Se houver um impedimento manual, marque **Bloqueada por outro motivo** e descreva a causa. Salve a atividade.
+5. Em atividades do tipo **Definição Técnica**, informe, se disponíveis, até três links de código no GitHub: um de **Frontend**, um de **Backend** e um de **Serviço**. Informe também o link do pacote de implantação.
+6. Defina a **Etapa**, o **Responsável**, a **Prioridade** e, quando aplicável, o **Prazo** e a **Próxima ação**.
+7. Use **Vincular a** para relacionar uma Definição Técnica à Análise de Requisitos correspondente ou um bug à Definição Técnica afetada.
+8. Registre **Critérios de conclusão** e inclua itens no **Checklist** quando a atividade exigir etapas menores.
+9. Se houver um impedimento manual, marque **Bloqueada por outro motivo** e descreva a causa. Salve a atividade.
 
 ## 3. Organizar o trabalho no Kanban
 
@@ -41,9 +42,8 @@ Use os filtros para encontrar atividades atrasadas, bloqueadas, sem responsável
 2. Confirme o vínculo com a Definição Técnica e atribua um responsável.
 3. Preencha a severidade (baixa, moderada, alta ou crítica) e o ambiente (por exemplo, HML, navegador e sistema operacional).
 4. Descreva os passos para reproduzir em ordem, além do resultado esperado e do resultado observado. Anexe evidências na aba **Evidências**.
-5. Se disponíveis, informe os links do código-fonte e do pacote de implantação no GitHub.
-6. Atualize a etapa do bug conforme o trabalho avançar: **Aberto**, **Em correção**, **Pronto para reteste**, **Bloqueado** ou **Fechado**.
-7. Depois da correção, mova para **Pronto para reteste**. O testador registra o resultado na conversa e fecha o bug se a validação passar; se falhar, descreve o novo resultado e devolve o card ao fluxo de correção.
+5. Atualize a etapa do bug conforme o trabalho avançar: **Aberto**, **Em correção**, **Pronto para reteste**, **Bloqueado** ou **Fechado**.
+6. Depois da correção, mova para **Pronto para reteste**. O testador registra o resultado na conversa e fecha o bug se a validação passar; se falhar, descreve o novo resultado e devolve o card ao fluxo de correção.
 
 Use um título curto que identifique o problema e evite incluir senhas, tokens ou dados pessoais nas evidências. A severidade indica impacto; a prioridade indica ordem de trabalho e pode ser definida separadamente.
 

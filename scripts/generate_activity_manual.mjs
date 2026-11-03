@@ -145,4 +145,4 @@ const entries = {
   'word/_rels/document.xml.rels': docRels,
 };
 await fs.writeFile(output, zip(entries));
-nodeRepl.write({ created: output, sections: (source.match(/^## /gm) || []).length, bytes: (await fs.stat(output)).size });
+console.log(JSON.stringify({ created: output, sections: (source.match(/^## /gm) || []).length, bytes: (await fs.stat(output)).size }));

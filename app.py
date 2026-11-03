@@ -894,7 +894,7 @@ def _work_item_from_payload(project: dict, payload: dict, item_id: str | None = 
         assignee = json.loads(row[0])["name"]
     payload = {**payload, "assignee": assignee, "assigneeId": assignee_id}
     history = list(current.get("history") or [])
-    fields = ("title", "status", "description", "parentId", "assignee", "assigneeId", "priority", "dueDate", "nextAction", "blocked", "blockedReason", "acceptanceCriteria", "checklist", "archived", "severity", "environment", "reproductionSteps", "expectedResult", "actualResult", "sourcePath", "deploymentPath")
+    fields = ("title", "status", "description", "parentId", "assignee", "assigneeId", "priority", "dueDate", "nextAction", "blocked", "blockedReason", "acceptanceCriteria", "checklist", "archived", "severity", "environment", "reproductionSteps", "expectedResult", "actualResult", "sourcePath", "sourceCodeLinks", "deploymentPath")
     for field in fields:
         if current and field in payload and current.get(field) != payload.get(field):
             history.append({"at": now, "field": field, "before": current.get(field), "after": payload.get(field)})
@@ -904,6 +904,29 @@ def _work_item_from_payload(project: dict, payload: dict, item_id: str | None = 
     severity = str(payload.get("severity") or "medium")
     if severity not in {"low", "medium", "high", "critical"}:
         raise ValueError("Severidade inválida.")
+    source_code_links = payload.get("sourceCodeLinks", current.get("sourceCodeLinks") or [])
+    if item_type == "technical-definition":
+        if not isinstance(source_code_links, list) or len(source_code_links) > 3:
+            raise ValueError("Informe no máximo três links de código.")
+        normalized_links = []
+        for entry in source_code_links:
+            if not isinstance(entry, dict):
+                raise ValueError("Registro de código inválido.")
+            source_type = str(entry.get("type") or "").strip()
+            source_url = str(entry.get("url") or "").strip()[:1000]
+            parsed_url = urlparse(source_url)
+            if source_type not in {"frontend", "backend", "service"} or not source_url or parsed_url.scheme != "https" or not parsed_url.netloc or parsed_url.username or parsed_url.password:
+                raise ValueError("Cada link precisa ter um tipo válido e uma URL HTTPS.")
+            if any(existing["type"] == source_type for existing in normalized_links):
+                raise ValueError("Use apenas um link para cada tipo: Frontend, Backend e Serviço.")
+            normalized_links.append({"type": source_type, "url": source_url})
+    else:
+        normalized_links = []
+    deployment_path = str(payload.get("deploymentPath") or "").strip()[:1000] if item_type == "technical-definition" else ""
+    if deployment_path:
+        parsed_deployment_url = urlparse(deployment_path)
+        if parsed_deployment_url.scheme != "https" or not parsed_deployment_url.netloc or parsed_deployment_url.username or parsed_deployment_url.password:
+            raise ValueError("O link do pacote de implantação deve ser uma URL HTTPS válida.")
     return {
         "id": item_id or uuid.uuid4().hex,
         "type": item_type,
@@ -915,8 +938,9 @@ def _work_item_from_payload(project: dict, payload: dict, item_id: str | None = 
         "reproductionSteps": str(payload.get("reproductionSteps") or "").strip()[:10000] if item_type == "bug" else "",
         "expectedResult": str(payload.get("expectedResult") or "").strip()[:5000] if item_type == "bug" else "",
         "actualResult": str(payload.get("actualResult") or "").strip()[:5000] if item_type == "bug" else "",
-        "sourcePath": str(payload.get("sourcePath") or "").strip()[:1000] if item_type == "bug" else "",
-        "deploymentPath": str(payload.get("deploymentPath") or "").strip()[:1000] if item_type == "bug" else "",
+        "sourceCodeLinks": normalized_links,
+        "sourcePath": str(payload.get("sourcePath") or "").strip()[:1000] if item_type == "technical-definition" else "",
+        "deploymentPath": deployment_path,
         "assignee": assignee,
         "assigneeId": assignee_id,
         "priority": priority,

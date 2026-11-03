@@ -282,6 +282,24 @@ main { width:min(1480px,calc(100% - 48px)); }
   accent-color:var(--brand);
 }
 }
+:root[data-theme="dark"] :is(.view-switch button,.work-item-filters button) { background:#263942; color:#d3e0e5; border-color:#405661; }
+:root[data-theme="dark"] :is(.view-switch button,.work-item-filters button):hover { background:#304751; border-color:#5d7d88; color:#fff; }
+:root[data-theme="dark"] :is(.view-switch button.active,.work-item-filters button.active) { background:#176b69; color:#f4fffd; border-color:#2f9a92; box-shadow:inset 0 0 0 1px #45aaa0; }
+:root[data-theme="dark"] .kanban-column-head > span { background:#344851; color:#e0eaee; border-color:#536b76; }
+:root[data-theme="dark"] .kanban-add-list-trigger { background:#22353e; color:#9ce0d9; border-color:#54727b; }
+:root[data-theme="dark"] .kanban-add-list-trigger:hover { background:#2a444c; border-color:#7ac9c1; color:#c8f5ef; }
+:root[data-theme="dark"] .kanban-card.type-requirement .kanban-kind { background:#253d48; color:#b8dce8; }
+:root[data-theme="dark"] label:not(.upload-file-button) { color:#d3e0e5; }
+:root[data-theme="dark"] .source-code-link-row button.source-code-remove { background:#362b31; color:#efafb2; border-color:#684750; }
+:root[data-theme="dark"] .source-code-link-row button.source-code-remove:hover { background:#493139; color:#ffd2d4; border-color:#a2636b; }
+.source-code-links-list { display:grid; gap:10px; margin:12px 0; }
+.source-code-link-row { display:grid; grid-template-columns:minmax(140px,.36fr) minmax(240px,1fr) auto; align-items:end; gap:10px; }
+.source-code-link-row label,.deployment-package-field { display:grid; gap:6px; font-size:11px; font-weight:600; }
+.source-code-link-row button.source-code-remove { min-height:40px; padding:0 12px; border:1px solid #d8c6c8; border-radius:7px; background:#fff; color:#9c3e46; }
+.source-code-link-row button.source-code-remove:hover { border-color:#c27a80; background:#fff4f4; }
+.source-code-add { min-height:36px; margin:0 0 14px; }
+.deployment-package-field { margin-top:2px; }
+@media(max-width:700px) { .source-code-link-row { grid-template-columns:1fr; gap:8px; } .source-code-link-row button.source-code-remove { justify-self:start; } }
 
 /* A full-width board with independently scrolling lists. */
 @media screen {
