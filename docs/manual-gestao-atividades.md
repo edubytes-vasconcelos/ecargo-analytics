@@ -80,6 +80,8 @@ No projeto **Reforma Tributária - escopo Novas taxas e Novas adequações fisca
 
 Para preparar uma cobrança, pergunte **Quem preciso cobrar?**. O assistente sugere atividades vencidas ou com prazo nos próximos sete dias que tenham responsável. Selecione **Preparar cobrança** para abrir a conversa daquela atividade com uma mensagem em rascunho. Revise o texto, confirme a pessoa mencionada e selecione **Enviar mensagem** quando quiser enviar. Fechar a conversa sem enviar descarta o rascunho.
 
+Atividades na etapa **Em Homol** aguardam validação do cliente. O assistente as mostra separadamente como pendências externas, sem classificá-las como atraso nem sugerir cobrança para a equipe interna.
+
 Use o resumo e a pauta como apoio para reuniões. Se uma atividade estiver sem responsável, prazo ou próxima ação, atualize esses dados no card antes de tomar uma decisão. As recomendações refletem somente o que está preenchido no painel.
 
 ## 10. Boas práticas por perfil
