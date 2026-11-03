@@ -1,6 +1,6 @@
 # Login próprio e administração de usuários
 
-O painel usa contas locais, sem Microsoft Entra ou serviço de e-mail. A consulta do painel continua disponível sem login; alterações em projetos, mensagens, envio e download de evidências exigem uma sessão e a troca da senha inicial. As configurações do painel e a administração de usuários exigem perfil Administrador.
+O painel usa contas locais, sem Microsoft Entra. A consulta do painel continua disponível sem login; alterações em projetos, mensagens, envio e download de evidências exigem uma sessão e a troca da senha inicial. As configurações do painel e a administração de usuários exigem perfil Administrador.
 
 ## Primeiro administrador
 
@@ -37,6 +37,14 @@ As sessões expiram após oito horas e as alterações exigem token CSRF. Tentat
 Contas, hashes, sessões e notificações ficam em `DATA_DIR/project_auth.sqlite`; mantenha esse volume persistente e inclua-o no backup junto de `projects.json` e das evidências. Use uma réplica do serviço, pois a escrita do arquivo de projetos JSON é protegida por processo.
 
 A URL do sistema pode conter `BASE_PATH`: os cookies e as chamadas da interface respeitam esse caminho. A integração `MS_GRAPH_*` de leitura do SharePoint continua independente.
+
+## Notificações por e-mail
+
+Quando alguém publica uma mensagem que gera uma notificação no painel (menção, responsável ou resposta), o sistema também tenta enviar um e-mail ao usuário ativo. A notificação interna é gravada antes do envio; uma falha no relay não impede o comentário nem remove a notificação do painel.
+
+Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_STARTTLS`, `SMTP_FROM` e `APP_PUBLIC_URL` no ambiente. Para o relay HML, o host validado é `login-relay01.loginlogistica.com.br`, porta `25`, com STARTTLS. A mensagem usa a conta do destinatário cadastrada no painel. O relay não anunciou SMTP AUTH no teste; a integração não envia credenciais. **O envio fica desativado enquanto `SMTP_FROM` não estiver configurado** com um endereço autorizado pelo time de infraestrutura. Não invente ou use um remetente antes dessa confirmação.
+
+O envio usa TLS com validação do certificado, timeout limitado, texto simples e não registra o conteúdo do e-mail nos logs. `APP_PUBLIC_URL` deve ser a URL acessível ao usuário, incluindo o caminho do painel.
 
 ## Verificação
 

@@ -8,8 +8,11 @@ import os
 import re
 import secrets
 import sqlite3
+import smtplib
+import ssl
 import time
 import uuid
+from email.message import EmailMessage
 
 SESSION_TTL = 8 * 3600
 
@@ -281,9 +284,51 @@ def handle_post(handler,path,data_dir,base_path):
     return True
 
 def notify(data_dir,item,project,entry,recipients):
+    email_recipients=[]
     with database(data_dir) as conn:
         for user_id in set(recipients)-{entry['authorId']}:
-            if not conn.execute('SELECT 1 FROM local_users WHERE id=? AND active=1',(user_id,)).fetchone(): continue
+            recipient=conn.execute('SELECT name,email FROM local_users WHERE id=? AND active=1',(user_id,)).fetchone()
+            if not recipient: continue
             notification_id=uuid.uuid4().hex
             payload={'id':notification_id,'projectId':project['id'],'itemId':item['id'],'title':item['title'],'author':entry['author'],'text':entry['text'][:180],'createdAt':entry['createdAt']}
             conn.execute('INSERT INTO auth_notifications (id,user_id,payload) VALUES (?,?,?)',(notification_id,user_id,json.dumps(payload)))
+            email_recipients.append({'id':user_id,'name':recipient['name'],'email':recipient['email']})
+    _send_comment_emails(email_recipients,item,project,entry)
+
+def _send_comment_emails(recipients,item,project,entry):
+    host=os.environ.get('SMTP_HOST','').strip()
+    sender=os.environ.get('SMTP_FROM','').strip()
+    if not host or not sender or not recipients:
+        return
+    try:
+        port=int(os.environ.get('SMTP_PORT','25'))
+        timeout=max(1,min(int(os.environ.get('SMTP_TIMEOUT_SECONDS','8')),30))
+    except ValueError:
+        print('SMTP notification skipped: invalid SMTP port or timeout')
+        return
+    project_name=re.sub(r'[\r\n]+',' ',str(project.get('name') or project.get('title') or 'Projeto'))[:120]
+    item_title=re.sub(r'[\r\n]+',' ',str(item.get('title') or 'Atividade'))[:160]
+    author=str(entry.get('author') or 'Uma pessoa da equipe')
+    text=str(entry.get('text') or '')[:10000]
+    public_url=os.environ.get('APP_PUBLIC_URL','').strip().rstrip('/')
+    try:
+        with smtplib.SMTP(host,port,timeout=timeout) as client:
+            client.ehlo()
+            if os.environ.get('SMTP_STARTTLS','1').strip().lower() not in {'0','false','no'}:
+                client.starttls(context=ssl.create_default_context())
+                client.ehlo()
+            for recipient in recipients:
+                message=EmailMessage()
+                message['Subject']=f'[{project_name}] Nova mensagem: {item_title}'
+                message['From']=sender
+                message['To']=recipient['email']
+                message.set_content(f'Olá {recipient["name"]},\n\n{author} enviou uma mensagem em "{item_title}" '
+                    f'no projeto "{project_name}".\n\nMensagem:\n{text}\n'
+                    +(f'\nAcesse o projeto: {public_url}\n' if public_url else ''))
+                try:
+                    client.send_message(message)
+                except (OSError,smtplib.SMTPException,ValueError) as exc:
+                    print(f'SMTP notification failed for user {recipient["id"]}: {type(exc).__name__}')
+    except (OSError,smtplib.SMTPException) as exc:
+        # In-app notifications are already persisted; mail failure must not reject the comment.
+        print(f'SMTP notification delivery failed: {type(exc).__name__}')

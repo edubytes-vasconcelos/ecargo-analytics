@@ -50,6 +50,16 @@ spec:
               value: "${BASE_PATH}"
             - name: DATA_DIR
               value: "/app/data"
+            - name: SMTP_HOST
+              value: "${SMTP_HOST}"
+            - name: SMTP_PORT
+              value: "${SMTP_PORT}"
+            - name: SMTP_STARTTLS
+              value: "${SMTP_STARTTLS}"
+            - name: SMTP_FROM
+              value: "${SMTP_FROM}"
+            - name: APP_PUBLIC_URL
+              value: "${APP_PUBLIC_URL}"
             - name: SYNC_INTERVAL_SECONDS
               value: "${SYNC_INTERVAL_SECONDS}"
             - name: SYNC_LOOKBACK_HOURS
