@@ -286,6 +286,7 @@ main { width:min(1480px,calc(100% - 48px)); }
 :root[data-theme="dark"] :is(.view-switch button,.work-item-filters button):hover { background:#304751; border-color:#5d7d88; color:#fff; }
 :root[data-theme="dark"] :is(.view-switch button.active,.work-item-filters button.active) { background:#176b69; color:#f4fffd; border-color:#2f9a92; box-shadow:inset 0 0 0 1px #45aaa0; }
 :root[data-theme="dark"] .kanban-column-head > span { background:#344851; color:#e0eaee; border-color:#536b76; }
+:root[data-theme="dark"] .kanban-project .kanban-column-head > span { background:#344851; color:#f0f5f7; border-color:#6a838d; }
 :root[data-theme="dark"] .kanban-add-list-trigger { background:#22353e; color:#9ce0d9; border-color:#54727b; }
 :root[data-theme="dark"] .kanban-add-list-trigger:hover { background:#2a444c; border-color:#7ac9c1; color:#c8f5ef; }
 :root[data-theme="dark"] .kanban-card.type-requirement .kanban-kind { background:#253d48; color:#b8dce8; }
