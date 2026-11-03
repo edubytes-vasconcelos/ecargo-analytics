@@ -2976,6 +2976,8 @@ hideStudyFormButton.addEventListener("click", () => {
 openSettingsButton.addEventListener("click", () => {
   if (!authState.user || authState.user.role !== 'admin' || authState.user.mustChangePassword) {
     openWorkPlanSettings();
+    settingsModal.querySelector('.settings-block').hidden = false;
+    document.querySelector('#settingsTitle').textContent = 'Configurações de evolutivas';
     return;
   }
   settingsModal.querySelector('.settings-block').hidden = false;

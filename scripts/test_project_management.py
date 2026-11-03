@@ -109,6 +109,19 @@ class ProjectManagementTests(unittest.TestCase):
             self.assertEqual(result['workPlanImage']['name'],'plano.png')
             self.assertTrue(Path(result['workPlanImage']['path']).is_file())
 
+    def test_public_project_creation(self):
+        anonymous=Client(self.base)
+        project=anonymous.request('/api/projects',{'name':'Evolutiva pública','notes':'Escopo inicial'})
+        self.assertEqual(project['type'],'construction')
+        study=anonymous.request('/api/projects/study',{'title':'Estudo público','description':'Análise inicial'})
+        self.assertEqual(study['type'],'study')
+        self.denied(400,lambda:anonymous.request('/api/projects',{'name':''}))
+        self.denied(400,lambda:anonymous.request('/api/projects/study',{'title':''}))
+        self.denied(400,lambda:anonymous.request('/api/projects/upload',raw=b'--upload-test--\r\n',content_type='multipart/form-data; boundary=upload-test'))
+        self.denied(401,lambda:anonymous.request('/api/projects/'+project['id'],method='DELETE'))
+        self.denied(401,lambda:anonymous.request('/api/projects/'+study['id'],{'title':'Alteração'},method='PATCH'))
+        self.denied(401,lambda:self.create(anonymous))
+
     def test_work_roles_and_permissions(self):
         result=self.admin.request('/api/auth/users',{'name':'Testador','email':uuid.uuid4().hex+'@example.test','workRole':'tester'})
         user=result['user']
