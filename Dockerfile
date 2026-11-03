@@ -15,7 +15,9 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app.py .
+COPY project_auth.py .
 COPY static ./static
+COPY scripts/manage_users.py ./scripts/manage_users.py
 
 RUN mkdir -p /app/data /app/work/uploads
 

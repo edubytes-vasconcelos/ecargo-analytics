@@ -735,6 +735,7 @@ function renderDashboard(projects) {
   projectsEl.className = "dashboard-sections";
   projectsEl.innerHTML = "";
 
+  projectsEl.appendChild(renderManagementOverview(projects));
   const ordered = orderedDashboardProjects(projects);
   const sections = [renderWorkPlanSection(), renderDashboardSection("Evolutivas", ordered.projects, "projects"), renderDashboardSection("Estudos", ordered.studies, "studies")].filter(Boolean);
   for (const section of orderedDashboardSections(sections)) {
@@ -798,7 +799,7 @@ function renderWorkPlanSection() {
     <div class="dashboard-section-head">
       <div>
         <h3>Plano de trabalho</h3>
-        <span>${image ? escapeHtml(image.name || "Imagem enviada") : "Imagem enviada pela engrenagem"}</span>
+        <span>${image ? escapeHtml(image.name || "Imagem enviada") : "Planejamento compartilhado da equipe"}</span>
       </div>
       <button class="section-toggle" type="button" aria-expanded="${collapsed ? "false" : "true"}">${collapsed ? "Expandir" : "Recolher"}</button>
     </div>
@@ -818,7 +819,7 @@ function renderWorkPlanSection() {
     body.innerHTML = `
       <div class="work-plan-empty">
         <p>Nenhuma imagem de plano de trabalho enviada.</p>
-        <button type="button" data-action="open-settings">Enviar pela engrenagem</button>
+        <button type="button" data-action="open-settings">Adicionar plano de trabalho</button>
       </div>
     `;
     body.querySelector("[data-action='open-settings']").addEventListener("click", () => {
@@ -1227,6 +1228,16 @@ function renderWorkItems(root, project) {
     <div><strong>${definitions.length}</strong><span>Definições técnicas</span></div>
     <div class="${openBugs.length ? "attention" : ""}"><strong>${openBugs.length}</strong><span>Bugs abertos</span></div>
   `;
+  const attentionOptions = [["overdue", "Atrasadas"], ["blocked", "Bloqueadas"], ["unassigned", "Sem responsável"], ["soon", "Vencem em 7 dias"], ["mine", "Minhas atividades"], ["mentions", "Minhas menções"]];
+  summary.innerHTML += attentionOptions.map(([filter, label]) => `<button type="button" class="attention-metric ${state.attentionFilter === filter ? "active" : ""}" data-attention="${filter}"><strong>${activeItems.filter((item) => workItemMatchesAttention(item, filter)).length}</strong><span>${label}</span></button>`).join("");
+  summary.querySelectorAll("[data-attention]").forEach((button) => button.addEventListener("click", () => {
+    if (["mine", "mentions"].includes(button.dataset.attention) && !managementIdentity()) { alert("Este filtro estará disponível quando houver identificação dos usuários."); return; }
+    state.attentionFilter = state.attentionFilter === button.dataset.attention ? null : button.dataset.attention;
+    state.workItemFilter = "all";
+    renderProjectDetail(project);
+  }));
+  if (state.attentionFilter) summary.insertAdjacentHTML("beforeend", '<button type="button" data-clear-attention>Limpar filtro de atenção</button>');
+  summary.querySelector("[data-clear-attention]")?.addEventListener("click", () => { state.attentionFilter = null; renderProjectDetail(project); });
 
   const viewSwitch = root.querySelector("[data-field='workItemViewSwitch']");
   const viewOptions = [["list", "Lista"], ["status", "Por status"]];
@@ -1247,14 +1258,19 @@ function renderWorkItems(root, project) {
     renderProjectDetail(project);
   }));
 
+  window.decorateWorkItemToolbar?.(root, project, state);
   const list = root.querySelector("[data-field='workItems']");
   if (!allItems.length) {
     list.innerHTML = `<div class="work-item-empty"><strong>Nenhuma atividade registrada</strong><span>Comece pela Análise de Requisitos e vincule as próximas etapas.</span></div>`;
     return;
   }
-  const visible = state.workItemFilter === "archived"
+  let visible = state.workItemFilter === "archived"
     ? archivedItems
     : activeItems.filter((item) => state.workItemFilter === "all" || item.type === state.workItemFilter);
+  if (state.attentionFilter) visible = visible.filter((item) => workItemMatchesAttention(item, state.attentionFilter));
+  if (window.matchesWorkspaceSearch) visible = visible.filter(item => matchesWorkspaceSearch(item, state));
+  const resultCount = root.querySelector('[data-field="activityResultCount"]');
+  if (resultCount) resultCount.textContent = `${visible.length} atividade${visible.length === 1 ? '' : 's'}`;
   if (state.workItemView === "grouped") {
     renderWorkItemGroups(list, visible, allItems, project, state.workItemFilter);
     return;
@@ -1283,6 +1299,7 @@ function workItemRowHtml(item, depth, allItems, project) {
       <div class="work-item-title-line"><h4>${escapeHtml(item.title)}</h4>${statusPillHtml(project, item)}</div>
       ${parent ? `<p class="work-item-parent">Vinculada a: ${escapeHtml(parent.title)}</p>` : ""}
       ${item.description ? `<div class="work-item-description markdown-content">${markdownBlock(item.description)}</div>` : ""}
+      ${workItemManagementHtml(item)}
     </div>
     <div class="work-item-meta">${childCount ? `<span>${childCount} vinculada${childCount > 1 ? "s" : ""}</span>` : ""}
     </div>
@@ -1504,6 +1521,7 @@ function renderWorkItemKanban(container, visible, allItems, project, state) {
             <strong>${escapeHtml(item.title)}</strong>
           </button>
           ${statusPillHtml(project, item)}
+          ${workItemManagementHtml(item)}
           ${parent ? `<small class="kanban-card-parent">${escapeHtml(parent.title)}</small>` : ""}
           ${childCount ? `<small class="kanban-card-children">${childCount} vinculada${childCount > 1 ? "s" : ""}</small>` : ""}
         </article>`;
@@ -1781,13 +1799,32 @@ function openWorkItemEditor(project, item = null, stage = null, preferredType = 
   else if (stage) workItemStatus.value = workItemStatusForStage(workItemType.value, stage);
   workItemTitle.value = item?.title || "";
   workItemDescription.value = item?.description || "";
+  for (const field of ["assignee", "priority", "dueDate", "nextAction", "blockedReason", "acceptanceCriteria"]) {
+    if (field === "assignee") { populateCardAssignees(item); continue; }
+    document.getElementById(`workItem${field[0].toUpperCase()}${field.slice(1)}`).value = item?.[field] || (field === "priority" ? "normal" : "");
+  }
+  editorChecklist = structuredClone(item?.checklist || []);
+  renderEditorChecklist();
+  resetEvidenceDraft();
+  commentReplyTo = null;
+  document.querySelector("#commentText").value = "";
+  document.querySelector("#sendComment").disabled = !authState.user || authState.user.mustChangePassword;
+  document.querySelector("#commentAuthor").textContent = authState.user ? `Enviando como ${authState.user.name} (${authState.user.email})` : "Entre para enviar mensagens.";
+  document.querySelector("#commentMentions").innerHTML = authState.users.map((user) => `<option value="${escapeHtml(user.id)}">${escapeHtml(user.name)} (${escapeHtml(user.email)})</option>`).join("");
+  document.querySelector("#workItemCollaboration").hidden = !item;
+  document.querySelector("#collaborationSaveHint").hidden = Boolean(item);
+  renderCollaboration(item);
   resetMarkdownPreview(workItemDescription);
   workItemType.disabled = Boolean(item);
   deleteWorkItemButton.hidden = !item;
   workItemModal.hidden = false;
+  resetEditorWorkspace(project, item);
 }
 
 function closeWorkItemEditor() {
+  if (collaborationBusy) return;
+  if (editorHasUnsavedChanges() && !window.confirm("Descartar as alterações e os anexos ainda não enviados?")) return;
+  resetEvidenceDraft();
   workItemModal.hidden = true;
   editingWorkItemId = null;
   workItemProjectId = null;
@@ -1956,6 +1993,7 @@ async function loadProjects() {
     const projects = await response.json();
     if (!response.ok) throw new Error(projects.error || "Falha ao carregar evolutivas.");
     projectsCache = projects;
+    if (editingWorkItemId && !collaborationBusy) renderCollaboration(collaborationItem());
     renderCurrentView();
     lastUpdate.textContent = `Última verificação: ${formatDate(new Date().toISOString(), true)}`;
   } catch (error) {
@@ -2282,6 +2320,7 @@ workItemType.addEventListener("change", () => {
 closeWorkItemButton.addEventListener("click", closeWorkItemEditor);
 workItemForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (collaborationBusy) return;
   if (!workItemProjectId) return;
   const payload = {
     type: workItemType.value,
@@ -2289,6 +2328,9 @@ workItemForm.addEventListener("submit", async (event) => {
     title: workItemTitle.value.trim(),
     description: workItemDescription.value.trim(),
     parentId: workItemParentField.hidden ? null : workItemParent.value,
+    ...Object.fromEntries(["assignee", "priority", "dueDate", "nextAction", "blockedReason", "acceptanceCriteria"].map((field) => [field, document.getElementById(`workItem${field[0].toUpperCase()}${field.slice(1)}`).value.trim()])),
+    checklist: editorChecklist,
+    assigneeId: document.querySelector("#workItemAssignee").value.startsWith("local:") ? document.querySelector("#workItemAssignee").value : "",
   };
   const suffix = editingWorkItemId ? `/${editingWorkItemId}` : "";
   const response = await fetch(`${appBasePath}/api/projects/${workItemProjectId}/work-items${suffix}`, {
@@ -2301,6 +2343,7 @@ workItemForm.addEventListener("submit", async (event) => {
     alert(body.error || "Nao foi possivel salvar a atividade.");
     return;
   }
+  markEditorSaved();
   closeWorkItemEditor();
   await loadProjects();
 });
@@ -2317,6 +2360,9 @@ deleteWorkItemButton.addEventListener("click", async () => {
     alert(body.error || "Nao foi possivel excluir a atividade.");
     return;
   }
+  document.querySelector("#commentText").value = "";
+  resetEvidenceDraft();
+  markEditorSaved();
   closeWorkItemEditor();
   await loadProjects();
 });

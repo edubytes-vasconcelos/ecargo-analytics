@@ -4,23 +4,26 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Portal E-Cargo | Evolutivas</title>
-    <link rel="stylesheet" href="__BASE_PATH__/projects/styles.css?v=33" />
+    <link rel="stylesheet" href="__BASE_PATH__/projects/styles.css?v=35" />
+    <link rel="stylesheet" href="__BASE_PATH__/projects/workspace.css?v=3" />
   </head>
   <body>
     <header class="topbar">
       <div class="brand-block">
-        <span class="eyebrow">Portal operacional</span>
-        <h1>Evolutivas e Sustentação</h1>
-        <p>Governança de cronogramas, avanço físico e pontos de atenção.</p>
+        <span class="eyebrow">E-Cargo</span>
+        <h1>Gestão de projetos</h1>
+        <p>Planeje entregas. Acompanhe o que precisa de atenção.</p>
       </div>
       <nav class="portal-nav" aria-label="Áreas do portal">
         <a href="__BASE_PATH__/">Sustentação</a>
         <a class="active" href="__BASE_PATH__/projetos">Evolutivas</a>
       </nav>
       <div class="top-actions">
-        <button id="openHelpButton" type="button" title="Abrir manual de uso">Manual</button>
-        <button id="exportDashboardButton" type="button" title="Exportar dashboard em PDF">Exportar PDF</button>
-        <button id="refreshButton" type="button" title="Atualizar cronogramas">Atualizar cronogramas</button>
+        <div id="projectAuth" role="status"></div>
+        <button id="notificationButton" type="button" hidden>Notificações (0)</button>
+        <button class="secondary-action" id="openHelpButton" type="button" title="Abrir manual de uso">Manual</button>
+        <button class="secondary-action" id="exportDashboardButton" type="button" title="Exportar dashboard em PDF">Exportar PDF</button>
+        <button class="secondary-action" id="refreshButton" type="button" title="Atualizar cronogramas">Atualizar</button>
         <button id="openSettingsButton" class="icon-button" type="button" title="Configurações" aria-label="Configurações">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" />
@@ -351,12 +354,21 @@
 
     <div id="workItemModal" class="modal" hidden>
       <div class="modal-panel work-item-modal" role="dialog" aria-modal="true" aria-labelledby="workItemModalTitle">
-        <div class="modal-header">
-          <h2 id="workItemModalTitle">Nova atividade</h2>
-          <button id="closeWorkItemButton" type="button" title="Fechar">Fechar</button>
-        </div>
-        <form id="workItemForm" class="modal-form">
+        <div class="modal-header editor-header"><div><p id="editorProjectName" class="hint"></p><h2 id="workItemModalTitle">Nova atividade</h2></div><button id="closeWorkItemButton" type="button" title="Fechar" aria-label="Fechar atividade">Fechar</button></div>
+        <nav class="editor-tabs" role="tablist" aria-label="Seções da atividade">
+          <button id="editorTabDetails" type="button" role="tab" data-editor-tab="details" aria-selected="true" aria-controls="workItemForm">Detalhes</button>
+          <button id="editorTabConversation" type="button" role="tab" data-editor-tab="conversation" aria-selected="false" aria-controls="editorConversation" tabindex="-1">Conversa <span data-editor-count="comments">0</span></button>
+          <button id="editorTabEvidence" type="button" role="tab" data-editor-tab="evidence" aria-selected="false" aria-controls="editorEvidence" tabindex="-1">Evidências <span data-editor-count="evidence">0</span></button>
+          <button id="editorTabHistory" type="button" role="tab" data-editor-tab="history" aria-selected="false" aria-controls="editorHistory" tabindex="-1">Histórico</button>
+        </nav>
+        <p id="collaborationStatus" role="status" aria-live="polite"></p>
+        <div class="editor-body">
+        <form id="workItemForm" class="modal-form editor-panel" role="tabpanel" aria-labelledby="editorTabDetails">
           <div class="work-item-form-grid">
+            <label class="wide-field">
+              Título
+              <input id="workItemTitle" autocomplete="off" required />
+            </label>
             <label>
               Tipo
               <select id="workItemType" required>
@@ -373,23 +385,61 @@
               <span id="workItemParentLabel">Vincular a</span>
               <select id="workItemParent"></select>
             </label>
-            <label class="wide-field">
-              Título
-              <input id="workItemTitle" autocomplete="off" required />
-            </label>
+            <label>Responsável<select id="workItemAssignee"><option value="">Sem responsável</option></select></label>
+            <label>Prioridade<select id="workItemPriority"><option value="low">Baixa</option><option value="normal" selected>Normal</option><option value="high">Alta</option><option value="urgent">Urgente</option></select></label>
+            <label>Prazo<input id="workItemDueDate" type="date" /></label>
+            <label>Próxima ação<input id="workItemNextAction" /></label>
             <label class="wide-field">
               Descrição
               <textarea id="workItemDescription" rows="5" data-markdown="true" placeholder="Contexto, critérios de aceite ou passos para reproduzir"></textarea>
             </label>
+            <label class="wide-field">Motivo do bloqueio<input id="workItemBlockedReason" /></label>
+            <label class="wide-field">Critérios de conclusão<textarea id="workItemAcceptanceCriteria" rows="3"></textarea></label>
+            <section class="wide-field collaboration-section" aria-label="Checklist">
+              <h3>Checklist</h3>
+              <div id="workItemChecklist"></div>
+              <div class="collaboration-compose"><input id="checklistText" aria-label="Novo item do checklist" placeholder="Próxima etapa" /><button id="addChecklistItem" type="button">Adicionar etapa</button></div>
+            </section>
           </div>
           <div class="modal-actions work-item-modal-actions">
             <button id="deleteWorkItemButton" class="danger-action" type="button" hidden>Excluir</button>
-            <button type="submit">Salvar atividade</button>
+            <span class="editor-save-state" id="editorSaveState">Alterações salvas</span><button type="submit">Salvar atividade</button>
           </div>
         </form>
+        <section id="workItemCollaboration" hidden>
+          <section id="editorConversation" class="editor-panel" role="tabpanel" aria-labelledby="editorTabConversation" hidden>
+          <div class="conversation-heading"><h3>Conversa</h3><button id="jumpToComposer" type="button">Escrever mensagem</button></div>
+          <div id="commentList" aria-live="polite"></div>
+          <p id="commentReplyLabel"></p>
+          <div class="comment-composer"><p id="commentAuthor"></p><label>Mensagem<textarea id="commentText" rows="3" maxlength="10000" placeholder="Registre uma dúvida, decisão ou atualização"></textarea></label>
+          <details class="mentions-picker"><summary>Notificar pessoas <span id="mentionSelectionCount">Opcional</span></summary><div id="mentionOptions"></div><select id="commentMentions" multiple aria-label="Pessoas mencionadas" hidden></select></details>
+          <div class="collaboration-compose"><button id="sendComment" type="button">Enviar mensagem</button><button id="cancelReply" type="button" hidden>Cancelar resposta</button></div>
+          </div>
+          </section>
+          <section id="editorEvidence" class="editor-panel" role="tabpanel" aria-labelledby="editorTabEvidence" hidden>
+          <h3>Evidências</h3>
+          <div id="evidenceDropZone" class="evidence-drop-zone" tabindex="0" role="group" aria-label="Colar ou arrastar evidências">
+            <div class="upload-symbol" aria-hidden="true">＋</div><strong>Adicione uma evidência</strong><p>Arraste arquivos ou cole uma captura com Ctrl+V.</p><small>Até 20 MB por arquivo</small>
+            <label class="upload-file-button">Selecionar arquivos<input id="evidenceFiles" type="file" multiple aria-label="Selecionar evidências" /></label>
+            <div id="evidencePending"></div>
+            <button id="sendEvidence" type="button" hidden>Enviar evidências</button>
+          </div>
+          <div id="evidenceList"></div>
+          </section>
+          <section id="editorHistory" class="editor-panel" role="tabpanel" aria-labelledby="editorTabHistory" hidden>
+          <h3>Histórico de alterações</h3>
+          <div id="workItemHistory"></div>
+          </section>
+        </section>
+        <p id="collaborationSaveHint" class="hint">Salve a atividade para iniciar uma conversa e adicionar evidências.</p>
+        </div>
       </div>
     </div>
 
-    <script src="__BASE_PATH__/projects/app.js?v=41"></script>
+    <div id="notificationModal" class="modal" hidden><div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="notificationTitle"><div class="modal-header"><h2 id="notificationTitle">Notificações</h2><button id="closeNotifications" type="button">Fechar</button></div><div id="notificationList"></div></div></div>
+    <script src="__BASE_PATH__/projects/auth.js?v=4"></script>
+    <script src="__BASE_PATH__/projects/management.js?v=4"></script>
+    <script src="__BASE_PATH__/projects/app.js?v=47"></script>
+    <script src="__BASE_PATH__/projects/workspace-ui.js?v=2"></script>
   </body>
 </html>

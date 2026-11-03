@@ -15,6 +15,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+from functools import wraps
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, time as datetime_time
 from http.cookiejar import CookieJar
@@ -27,6 +28,7 @@ except ModuleNotFoundError:
     cgi = None
 
 import pandas as pd
+import project_auth
 
 
 ROOT = Path(__file__).resolve().parent
@@ -50,6 +52,24 @@ LEGACY_SOURCE = LEGACY_REPO / "Chamados222Pendencias" / "Repository" / "Impls" /
 GRAPH_BASE_URL = "https://graph.microsoft.com/v1.0"
 GRAPH_TOKEN: dict[str, object] = {"value": "", "expires_at": 0.0}
 PROJECT_CONVERT_LOCK = threading.Lock()
+PROJECT_STORE_LOCK = threading.RLock()
+
+
+def project_store_transaction(request_handler):
+    @wraps(request_handler)
+    def wrapped(*args, **kwargs):
+        with PROJECT_STORE_LOCK:
+            handler = args[0]
+            path = handler._route_path()
+            handler.project_identity = {"id": None, "name": "Não identificado", "email": ""}
+            protected = path.startswith(("/api/projects", "/api/project-settings", "/api/work-item-images"))
+            if handler.command in {"POST", "PATCH", "DELETE"} and protected:
+                identity = project_auth.require_write(handler, DATA_DIR, admin=path.startswith("/api/project-settings"))
+                if identity is None:
+                    return
+                handler.project_identity = identity["user"]
+            return request_handler(*args, **kwargs)
+    return wrapped
 
 MONTH_NAMES = [
     "Janeiro",
@@ -251,7 +271,7 @@ def _read_form_data(headers, rfile) -> tuple[dict[str, str], UploadFile | None]:
         if not name_match:
             continue
         field_name = name_match.group(1)
-        value = content.rstrip(b"\r\n-")
+        value = content[:-2] if content.endswith(b"\r\n") else content
         filename_match = re.search(r'filename="([^"]+)"', disposition)
         if filename_match:
             file_item = UploadFile(filename_match.group(1), value)
@@ -849,12 +869,52 @@ def _work_item_from_payload(project: dict, payload: dict, item_id: str | None = 
 
     now = datetime.now().isoformat(timespec="seconds")
     archived = bool(payload.get("archived", False))
+    priority = str(payload.get("priority") or "normal")
+    if priority not in {"low", "normal", "high", "urgent"}:
+        raise ValueError("Prioridade inválida.")
+    due_date = str(payload.get("dueDate") or "")
+    if due_date:
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", due_date):
+            raise ValueError("Prazo invalido.")
+        try:
+            datetime.strptime(due_date, "%Y-%m-%d")
+        except ValueError:
+            raise ValueError("Prazo inválido.")
+    current = next((item for item in items if item.get("id") == item_id), {})
+    assignee_id = str(payload.get("assigneeId") or "")
+    assignee = str(payload.get("assignee") or "").strip()[:120]
+    if assignee_id:
+        with project_auth.database(DATA_DIR) as connection:
+            row = connection.execute("SELECT a.payload FROM auth_users a JOIN local_users u ON u.id=a.id WHERE a.id=? AND u.active=1", (assignee_id,)).fetchone()
+        if row is None:
+            raise ValueError("Selecione um responsável que já entrou no sistema.")
+        assignee = json.loads(row[0])["name"]
+    payload = {**payload, "assignee": assignee, "assigneeId": assignee_id}
+    history = list(current.get("history") or [])
+    fields = ("title", "status", "description", "parentId", "assignee", "assigneeId", "priority", "dueDate", "nextAction", "blockedReason", "acceptanceCriteria", "checklist", "archived")
+    for field in fields:
+        if current and field in payload and current.get(field) != payload.get(field):
+            history.append({"at": now, "field": field, "before": current.get(field), "after": payload.get(field)})
+    checklist = payload.get("checklist") or []
+    if not isinstance(checklist, list) or len(checklist) > 100 or any(not isinstance(entry, dict) or not str(entry.get("text", "")).strip() for entry in checklist):
+        raise ValueError("Checklist inválido (máximo de 100 itens).")
     return {
         "id": item_id or uuid.uuid4().hex,
         "type": item_type,
         "title": title,
         "status": status,
         "description": description,
+        "assignee": assignee,
+        "assigneeId": assignee_id,
+        "priority": priority,
+        "dueDate": due_date,
+        "nextAction": str(payload.get("nextAction") or "").strip(),
+        "blockedReason": str(payload.get("blockedReason") or "").strip(),
+        "acceptanceCriteria": str(payload.get("acceptanceCriteria") or "").strip(),
+        "checklist": [{"text": str(entry["text"]).strip(), "done": bool(entry.get("done"))} for entry in checklist],
+        "comments": current.get("comments", []),
+        "evidence": current.get("evidence", []),
+        "history": history,
         "parentId": parent_id,
         "archived": archived,
         "archivedAt": (str(payload.get("archivedAt") or now) if archived else None),
@@ -1618,10 +1678,14 @@ def projects_payload() -> list[dict]:
 
 
 class Handler(BaseHTTPRequestHandler):
+    def log_request(self, code="-", size="-"):
+        self.log_message('"%s %s" %s %s', self.command, self._route_path(), str(code), str(size))
+
     def _send_json(self, payload: dict, status: int = 200) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -1644,8 +1708,28 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    @project_store_transaction
     def do_GET(self) -> None:
         path = self._route_path()
+        if project_auth.handle_get(self, path, DATA_DIR, BASE_PATH):
+            return
+        evidence_match = re.fullmatch(r"/api/work-item-evidence/([a-f0-9]{32})", path)
+        if evidence_match:
+            if not project_auth.require_read(self, DATA_DIR):
+                return
+            target = DATA_DIR / "work_item_evidence" / evidence_match.group(1)
+            if not target.is_file():
+                self.send_error(404)
+                return
+            body = target.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/octet-stream")
+            self.send_header("Content-Disposition", "attachment")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if path == "/api/base":
             self._send_json(base_payload())
             return
@@ -1729,8 +1813,74 @@ class Handler(BaseHTTPRequestHandler):
             return
         self._send_file(target)
 
+    @project_store_transaction
     def do_POST(self) -> None:
         path = self._route_path()
+        if project_auth.handle_post(self, path, DATA_DIR, BASE_PATH):
+            return
+        collaboration_match = re.fullmatch(r"/api/projects/([^/]+)/work-items/([^/]+)/(comments|evidence)", path)
+        if collaboration_match:
+            try:
+                projects = read_projects()
+                project = _find_project(projects, collaboration_match.group(1))
+                item = next((item for item in (project or {}).get("workItems", []) if item.get("id") == collaboration_match.group(2)), None)
+                if item is None:
+                    self._send_json({"error": "Atividade não encontrada."}, 404)
+                    return
+                now = datetime.now().isoformat(timespec="seconds")
+                if collaboration_match.group(3) == "comments":
+                    length = int(self.headers.get("Content-Length", "0") or "0")
+                    if length > 64000:
+                        raise ValueError("Mensagem muito longa.")
+                    payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+                    text = str(payload.get("text") or "").strip()
+                    author = self.project_identity["name"]
+                    if not text or len(text) > 10000 or not author:
+                        raise ValueError("Informe uma mensagem de até 10.000 caracteres.")
+                    reply_to = payload.get("replyTo") or None
+                    if reply_to and not any(comment.get("id") == reply_to for comment in item.get("comments", [])):
+                        raise ValueError("Mensagem de resposta não encontrada.")
+                    entry = {"id": uuid.uuid4().hex, "author": author, "authorId": self.project_identity["id"], "authorEmail": self.project_identity["email"], "text": text, "replyTo": reply_to, "createdAt": now}
+                    mention_ids = payload.get("mentionIds") or []
+                    if not isinstance(mention_ids, list) or len(mention_ids) > 100 or any(not isinstance(value, str) for value in mention_ids):
+                        raise ValueError("Menções inválidas.")
+                    with project_auth.database(DATA_DIR) as connection:
+                        users = [json.loads(row[0]) for row in connection.execute("SELECT a.payload FROM auth_users a JOIN local_users u ON u.id=a.id WHERE u.active=1")]
+                    mentioned = [user for user in users if user["id"] in mention_ids]
+                    if len({user["id"] for user in mentioned}) != len(set(mention_ids)):
+                        raise ValueError("Uma pessoa mencionada não foi encontrada.")
+                    entry["mentionIds"] = [user["id"] for user in mentioned]
+                    entry["mentions"] = mentioned
+                    item.setdefault("comments", []).append(entry)
+                else:
+                    if int(self.headers.get("Content-Length", "0") or "0") > 21 * 1024 * 1024:
+                        raise ValueError("Cada arquivo deve ter no máximo 20 MB.")
+                    _fields, file_item = _read_form_data(self.headers, self.rfile)
+                    if file_item is None or not getattr(file_item, "filename", ""):
+                        raise ValueError("Selecione um arquivo.")
+                    content = file_item.file.read(20 * 1024 * 1024 + 1)
+                    if not content or len(content) > 20 * 1024 * 1024:
+                        raise ValueError("Envie um arquivo não vazio de até 20 MB.")
+                    entry_id = uuid.uuid4().hex
+                    directory = DATA_DIR / "work_item_evidence"
+                    directory.mkdir(parents=True, exist_ok=True)
+                    (directory / entry_id).write_bytes(content)
+                    name = str(file_item.filename).replace("\\", "/").rsplit("/", 1)[-1][:240]
+                    entry = {"id": entry_id, "name": name, "size": len(content), "createdAt": now, "author": self.project_identity["name"], "authorId": self.project_identity["id"], "url": f"{BASE_PATH}/api/work-item-evidence/{entry_id}"}
+                    item.setdefault("evidence", []).append(entry)
+                item["updatedAt"] = project["updatedAt"] = now
+                write_projects(projects)
+                if collaboration_match.group(3) == "comments":
+                    recipients = list(entry["mentionIds"])
+                    if item.get("assigneeId"):
+                        recipients.append(item["assigneeId"])
+                    if reply_to:
+                        recipients.extend(comment["authorId"] for comment in item.get("comments", []) if comment.get("id") == reply_to and comment.get("authorId"))
+                    project_auth.notify(DATA_DIR, item, project, entry, recipients)
+                self._send_json(entry, 201)
+            except (ValueError, RuntimeError) as exc:
+                self._send_json({"error": str(exc)}, 400)
+            return
         column_match = re.fullmatch(r"/api/projects/([^/]+)/work-item-columns", path)
         if column_match:
             try:
@@ -1965,6 +2115,7 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as exc:
             self._send_json({"error": f"Não consegui processar o arquivo: {exc}"}, 500)
 
+    @project_store_transaction
     def do_PATCH(self) -> None:
         path = self._route_path()
         order_match = re.fullmatch(r"/api/projects/([^/]+)/work-item-column-order", path)
@@ -2035,6 +2186,9 @@ class Handler(BaseHTTPRequestHandler):
                     self._send_json({"error": "Atividade não encontrada."}, 404)
                     return
                 updated = _work_item_from_payload(project, {**current, **payload}, str(current.get("id")))
+                for entry in updated["history"][len(current.get("history", [])):]:
+                    entry["author"] = self.project_identity["name"]
+                    entry["authorId"] = self.project_identity["id"]
                 updated["createdAt"] = current.get("createdAt") or updated["createdAt"]
                 items[items.index(current)] = updated
                 project["workItems"] = items
@@ -2083,6 +2237,7 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as exc:
             self._send_json({"error": str(exc)}, 400)
 
+    @project_store_transaction
     def do_DELETE(self) -> None:
         path = self._route_path()
         if path == "/api/project-settings/plan-image":

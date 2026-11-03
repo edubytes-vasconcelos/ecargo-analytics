@@ -2676,3 +2676,52 @@ dd {
     color: var(--amber);
   }
 }
+.collaboration-section { border-top: 1px solid var(--border, #dde3eb); padding-top: 18px; margin-top: 18px; }
+.management-overview { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; }
+.management-overview h2 { margin-bottom: 14px; }
+.management-attention-list { display: grid; gap: 8px; max-height: 280px; overflow-y: auto; margin-top: 14px; }
+.management-attention-item { display: grid; gap: 6px; text-align: left; width: 100%; padding: 12px; white-space: normal; overflow-wrap: anywhere; background: var(--panel-soft); color: var(--ink); border: 1px solid var(--line); }
+.management-attention-item span { font-size: 12px; color: var(--muted); }
+#projectAuth { max-width: 280px; font-size: 12px; }
+#notificationList { display: grid; gap: 10px; }
+#workItemCollaboration select { max-width: 100%; padding: 8px; }
+.collaboration-section h3 { margin: 8px 0 14px; }
+.collaboration-section > label { display: grid; gap: 6px; margin: 12px 0; }
+.collaboration-section input:not([type="checkbox"]), .collaboration-section textarea { width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid var(--border, #ccd5df); border-radius: 8px; font: inherit; }
+.collaboration-compose { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 10px 0; }
+.collaboration-compose input { flex: 1; min-width: 160px; }
+.checklist-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 0; }
+.checklist-row label { display: flex; align-items: center; gap: 8px; overflow-wrap: anywhere; }
+.checklist-row input:checked + span { text-decoration: line-through; color: var(--muted, #64748b); }
+.evidence-drop-zone { border: 2px dashed var(--border, #ccd5df); border-radius: 12px; padding: 16px; }
+.evidence-drop-zone:focus, .evidence-drop-zone:focus-within, .evidence-drop-zone.drag-over { border-color: var(--blue, #2563eb); outline: 2px solid #dbeafe; }
+.evidence-preview, .evidence-entry { display: flex; align-items: center; gap: 12px; padding: 10px 0; flex-wrap: wrap; overflow-wrap: anywhere; }
+.evidence-preview img { width: 100px; height: 75px; object-fit: contain; border-radius: 6px; background: #eef2f7; }
+.evidence-entry small, .card-comment small, .history-entry small { color: var(--muted, #64748b); font-size: 12px; }
+.card-comment { border: 1px solid var(--border, #dde3eb); border-radius: 10px; padding: 14px; margin: 12px 0; }
+.card-comment header { display: flex; gap: 12px; justify-content: space-between; flex-wrap: wrap; }
+.card-comment p, .history-entry p { white-space: pre-wrap; overflow-wrap: anywhere; }
+.card-comment blockquote { border-left: 3px solid var(--border, #ccd5df); padding-left: 12px; margin: 12px 0; color: var(--muted, #64748b); }
+.history-entry { border-bottom: 1px solid var(--border, #dde3eb); padding: 10px 0; }
+.history-entry small { margin-left: 12px; }
+.card-management-meta { display: flex; flex-wrap: wrap; gap: 6px 10px; padding: 8px 0; font-size: 12px; color: var(--muted, #64748b); }
+.card-management-meta small { flex-basis: 100%; overflow-wrap: anywhere; }
+.priority-high, .priority-urgent, .overdue-label { color: var(--red, #b42318); font-weight: 700; }
+.work-item-summary[data-field] { grid-template-columns: repeat(auto-fit, minmax(125px, 1fr)); }
+.attention-metric { display: grid; text-align: left; gap: 4px; background: #fff; border: 1px solid var(--border, #dde3eb); color: inherit; padding: 12px; border-radius: 10px; cursor: pointer; }
+.attention-metric:hover, .attention-metric.active { border-color: var(--blue, #2563eb); background: #eff6ff; }
+#workItemCollaboration [hidden], #evidencePending:empty { display: none; }
+#collaborationStatus { color: var(--blue, #2563eb); overflow-wrap: anywhere; }
+
+#localAuthModal .modal-panel { max-width: 480px; }
+#localAuthModal label, #localUsersModal label { display: grid; gap: 6px; }
+#localAuthModal input, #localUsersModal input:not([type="checkbox"]), #localUsersModal select { width: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 6px; }
+#localAuthStatus, #localUsersStatus { margin: 12px 0; color: var(--red); }
+#localLoginForm[hidden], #localPasswordForm[hidden] { display: none; }
+.local-user-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; border-top: 1px solid var(--line); padding: 14px 0; }
+.local-user-row p { flex-basis: 100%; overflow-wrap: anywhere; }
+#localUsersModal .local-user-row select { width: auto; }
+#localUsersModal .local-user-row label { display: flex; align-items: center; }
+.initial-password { display: block; background: #fff8db; padding: 14px; border-radius: 8px; margin: 14px 0; overflow-wrap: anywhere; }
+.initial-password[hidden] { display: none; }
+#projectAuth { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
