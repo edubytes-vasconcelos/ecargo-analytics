@@ -44,7 +44,7 @@ Quando alguém publica uma mensagem que gera uma notificação no painel (menç�
 
 Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_STARTTLS`, `SMTP_FROM` e `APP_PUBLIC_URL` no ambiente. Para o relay HML, o host validado é `login-relay01.loginlogistica.com.br`, porta `25`, com STARTTLS. A mensagem usa a conta do destinatário cadastrada no painel. O relay não anunciou SMTP AUTH no teste; a integração não envia credenciais. **O envio fica desativado enquanto `SMTP_FROM` não estiver configurado** com um endereço autorizado pelo time de infraestrutura. Não invente ou use um remetente antes dessa confirmação.
 
-O envio usa TLS com validação do certificado, timeout limitado, texto simples e não registra o conteúdo do e-mail nos logs. `APP_PUBLIC_URL` deve ser a URL acessível ao usuário, incluindo o caminho do painel.
+O envio usa timeout limitado, corpo em texto simples e não registra o conteúdo do e-mail nos logs. `APP_PUBLIC_URL` deve ser a URL acessível ao usuário, incluindo o caminho do painel. Em HML, `SMTP_STARTTLS=0` foi autorizado explicitamente para permitir o relay atual; a conexão entre o pod e o relay não é criptografada. Não reutilize essa configuração em produção.
 
 ## Verificação
 
