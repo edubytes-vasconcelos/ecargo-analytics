@@ -408,7 +408,7 @@ main { width:min(1480px,calc(100% - 48px)); }
 .kanban-project .work-item-kanban { display:grid; grid-auto-flow:column; grid-auto-columns:304px; grid-template-rows:max-content; align-items:stretch; overflow:auto; overscroll-behavior:contain; padding:10px; gap:12px; scrollbar-gutter:stable; }
 .kanban-project .kanban-column { max-height:none; height:auto; min-height:200px; }
 .kanban-project .kanban-column-body { flex:0 0 auto; max-height:none; overflow:visible; }
-.kanban-column-toolbar { position:sticky; top:0; z-index:3; background:#e2e9ed; border-radius:10px 10px 0 0; border-bottom:1px solid #d6e0e5; margin-bottom:4px; }
+.kanban-column-toolbar { position:static; top:auto; z-index:auto; background:#e2e9ed; border-radius:10px 10px 0 0; border-bottom:1px solid #d6e0e5; margin-bottom:4px; }
 .kanban-project .kanban-column-head { padding:10px 10px 7px; }
 .kanban-project .kanban-owner-filter { padding:0 10px 8px; }
 @media(min-width:1800px) { .kanban-project .work-item-kanban { grid-auto-columns:324px; } }
