@@ -102,8 +102,9 @@ scheduleUpdateInput.type = "file";
 scheduleUpdateInput.accept = ".xml,.mpp,.mpt";
 scheduleUpdateInput.hidden = true;
 document.body.appendChild(scheduleUpdateInput);
-const scheduleFeedback = document.createElement("div");
+const scheduleFeedback = document.createElement("dialog");
 scheduleFeedback.className = "schedule-update-feedback";
+scheduleFeedback.setAttribute("aria-label", "Atualização do cronograma");
 scheduleFeedback.hidden = true;
 const scheduleFeedbackText = document.createElement("p");
 scheduleFeedbackText.setAttribute("role", "status");
@@ -113,16 +114,27 @@ const closeScheduleFeedback = document.createElement("button");
 closeScheduleFeedback.type = "button";
 closeScheduleFeedback.textContent = "Fechar";
 closeScheduleFeedback.setAttribute("aria-label", "Fechar mensagem de atualização do cronograma");
-closeScheduleFeedback.addEventListener("click", () => { scheduleFeedback.hidden = true; });
+function closeScheduleUpdateFeedback() {
+  scheduleFeedback.close();
+  scheduleFeedback.hidden = true;
+}
+closeScheduleFeedback.addEventListener("click", closeScheduleUpdateFeedback);
+scheduleFeedback.addEventListener("cancel", event => {
+  event.preventDefault();
+  if (!scheduleUpdateBusy) closeScheduleUpdateFeedback();
+});
 scheduleFeedback.append(scheduleFeedbackText, closeScheduleFeedback);
 document.body.appendChild(scheduleFeedback);
 let scheduleUpdateBusy = false;
 
 function showScheduleFeedback(message, state) {
+  if (scheduleFeedback.open) scheduleFeedback.close();
   scheduleFeedback.hidden = false;
   scheduleFeedback.dataset.state = state;
   scheduleFeedbackText.textContent = message;
   closeScheduleFeedback.hidden = state === "pending";
+  if (state === "pending") scheduleFeedback.show();
+  else scheduleFeedback.showModal();
 }
 
 let projectsCache = [];

@@ -18,6 +18,10 @@
 
 .schedule-update-feedback { position: fixed; z-index: 1200; right: 20px; bottom: 20px; max-width: min(520px, calc(100vw - 40px)); display: flex; align-items: center; gap: 16px; padding: 16px; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-left: 4px solid var(--brand); border-radius: 6px; box-shadow: var(--shadow); }
 .schedule-update-feedback[hidden] { display: none; }
+.schedule-update-feedback:not([open]) { display: none; }
+.schedule-update-feedback { margin: 0; }
+.schedule-update-feedback:modal { inset: 50% auto auto 50%; transform: translate(-50%, -50%); width: min(520px, calc(100vw - 40px)); padding: 24px; }
+.schedule-update-feedback::backdrop { background: rgba(15, 30, 40, .4); }
 .schedule-update-feedback p { overflow-wrap: anywhere; }
 .schedule-update-feedback[data-state="success"] { border-left-color: var(--green); }
 .schedule-update-feedback[data-state="error"] { border-left-color: var(--red); }

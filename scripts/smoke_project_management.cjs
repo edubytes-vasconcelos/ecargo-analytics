@@ -35,14 +35,23 @@ const fs = require('node:fs');
       await uploadGate;
       await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
     });
-    await admin.evaluate(() => {
-      scheduleUpdateProjectId = projectsCache[0].id;
-      window.scheduleFeedbackTest = updateProjectSchedule(new File(['<Project/>'], 'cronograma.xml'));
-    });
+    await admin.evaluate(() => openProject(projectsCache[0].id));
+    const [scheduleChooser] = await Promise.all([
+      admin.waitForEvent('filechooser'),
+      admin.locator('[data-action="update"]').click(),
+    ]);
+    await scheduleChooser.setFiles({ name: 'cronograma.xml', mimeType: 'application/xml', buffer: Buffer.from('<Project/>') });
     await admin.locator('.schedule-update-feedback[data-state="pending"]').waitFor({ state: 'visible' });
     assert.match(await admin.locator('.schedule-update-feedback').innerText(), /Atualizando cronograma/);
     releaseUpload();
-    await admin.evaluate(() => window.scheduleFeedbackTest);
+    await admin.locator('.schedule-update-feedback[data-state="success"]').waitFor({ state: 'visible' });
+    assert.equal(await admin.locator('.schedule-update-feedback').evaluate(el => el.matches(':modal')), true);
+    const feedbackBounds = await admin.locator('.schedule-update-feedback').boundingBox();
+    const viewport = admin.viewportSize();
+    assert(Math.abs(feedbackBounds.x + feedbackBounds.width / 2 - viewport.width / 2) < 2);
+    assert(Math.abs(feedbackBounds.y + feedbackBounds.height / 2 - viewport.height / 2) < 2);
+    fs.mkdirSync('outputs', { recursive: true });
+    await admin.screenshot({ path: 'outputs/schedule-update-confirmation.png' });
     assert.match(await admin.locator('.schedule-update-feedback[data-state="success"]').innerText(), /atualizado com sucesso.*cronograma.xml/);
     await admin.locator('.schedule-update-feedback button').click();
     assert.equal(await admin.locator('.schedule-update-feedback').isVisible(), false);
@@ -222,7 +231,7 @@ const fs = require('node:fs');
     assert.equal(await page.locator('#closeLocalAuth').isVisible(), true);
     assert.equal(await page.locator('#closeLocalAuth').innerText(), 'Sair');
     await page.locator('#closeLocalAuth').click();
-    await page.waitForFunction(() => authState.csrfToken && !authState.user);
+    await page.waitForFunction(() => typeof authState !== 'undefined' && authState.csrfToken && !authState.user);
     assert.equal(await page.locator('#localAuthModal').isVisible(), false);
     await page.locator('#projectAuth').getByRole('button', { name: 'Entrar', exact: true }).click();
     await page.locator('#localLoginEmail').fill('bruno@example.test');
