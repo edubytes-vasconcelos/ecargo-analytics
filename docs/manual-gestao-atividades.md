@@ -15,8 +15,8 @@ Este guia mostra como registrar e acompanhar atividades de um projeto no painel,
 ## 2. Acompanhar evolutivas no dashboard
 
 1. A gestão abre com o filtro **Em andamento**. Use **Todos**, **Em andamento** ou **Concluídos** para consultar evolutivas e estudos. Os números mostram a quantidade em cada situação.
-2. Em qualquer card de evolutiva ou estudo, selecione **Concluir projeto** quando estiver finalizado. Essa ação e a opção **Reabrir** não exigem login. A conclusão fica salva no projeto.
-3. Para retomar um projeto, selecione **Reabrir**. Ele volta para **Em andamento**.
+2. Em um card de evolutiva, selecione **Concluir projeto**; em um card de estudo, selecione **Concluir estudo**. Essas ações e as opções **Reabrir projeto** ou **Reabrir estudo** não exigem login. A conclusão fica salva no respectivo item.
+3. Para retomar o trabalho, selecione **Reabrir projeto** ou **Reabrir estudo**. O item volta para **Em andamento**.
 4. A conclusão do projeto é independente da etapa dos cards de atividade: concluir o projeto não fecha nem move suas atividades automaticamente.
 
 ## 3. Registrar uma atividade

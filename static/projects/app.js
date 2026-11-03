@@ -1102,7 +1102,9 @@ function createProjectCard(project) {
 }
 
 function projectCompletionButton(project) {
-  return `<button class="project-completion-toggle" type="button" data-action="toggle-completion" aria-label="${project.completed ? "Reabrir projeto" : "Marcar projeto como concluído"}">${project.completed ? "Reabrir" : "Concluir projeto"}</button>`;
+  const subject = isStudyProject(project) ? "estudo" : "projeto";
+  const action = project.completed ? `Reabrir ${subject}` : `Concluir ${subject}`;
+  return `<button class="project-completion-toggle" type="button" data-action="toggle-completion" aria-label="${action}">${action}</button>`;
 }
 
 function bindProjectCompletion(card, project) {
