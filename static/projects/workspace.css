@@ -69,10 +69,14 @@ main { width:min(1480px,calc(100% - 48px)); }
 .activity-result-count { font-size:12px; color:var(--muted); padding-bottom:11px; margin-left:auto; }
 .work-item-kanban { background:#edf2f4; padding:16px; gap:16px; border-color:var(--line); border-radius:10px; min-height:300px; }
 .dashboard-section-head > div { min-width:0; }
-.evolution-filters { display:flex; flex-wrap:wrap; gap:6px; margin-top:9px; }
-.evolution-filters button { min-height:30px; display:inline-flex; align-items:center; gap:7px; padding:3px 10px; border:1px solid var(--line); border-radius:18px; background:var(--panel); color:var(--muted); font-size:12px; }
-.evolution-filters button[aria-pressed="true"] { border-color:var(--brand); background:var(--brand); color:#fff; }
-.evolution-filters button span { display:inline-grid; min-width:18px; height:18px; place-items:center; padding:0 4px; border-radius:10px; background:color-mix(in srgb, currentColor 14%, transparent); font-size:10px; }
+.dashboard-filter-toolbar { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px 20px; padding:12px 16px; border:1px solid var(--line); border-radius:10px; background:var(--panel); box-shadow:var(--shadow); }
+.dashboard-filter-copy { display:grid; gap:2px; }
+.dashboard-filter-copy strong { font-size:13px; }
+.dashboard-filter-copy span { color:var(--muted); font-size:11px; }
+.dashboard-project-filters { display:flex; flex-wrap:wrap; gap:6px; }
+.dashboard-project-filters button { min-height:32px; display:inline-flex; align-items:center; gap:7px; padding:3px 10px; border:1px solid var(--line); border-radius:18px; background:var(--panel); color:var(--muted); font-size:12px; }
+.dashboard-project-filters button[aria-pressed="true"] { border-color:var(--brand); background:var(--brand); color:#fff; }
+.dashboard-project-filters button span { display:inline-grid; min-width:18px; height:18px; place-items:center; padding:0 4px; border-radius:10px; background:color-mix(in srgb, currentColor 14%, transparent); font-size:10px; }
 .summary-status-stack { display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex:none; }
 .summary-status.completed { color:#176748; background:#e6f4ec; }
 .project-completion-toggle { min-height:27px; padding:2px 8px; border:1px solid var(--line); border-radius:6px; background:var(--panel); color:var(--brand-dark); font-size:11px; }
@@ -554,10 +558,11 @@ main { width:min(1480px,calc(100% - 48px)); }
 :root[data-theme="dark"] :is(.kanban-owner-filter.is-filtered select,.kanban-sidebar-toggle.has-filter,.kanban-project .kanban-project-actions .kanban-sidebar-toggle.has-filter) { background:#1d3d40; color:#9ce0d9; border-color:#397f7c; }
 :root[data-theme="dark"] :is(.work-item-summary[data-field] > div,.work-item-summary .attention-metric,.management-attention-item) { background:var(--panel-soft); color:var(--ink); border-color:var(--line); }
 :root[data-theme="dark"] .management-attention-item:hover { background:#2a3c45; color:var(--ink); }
-:root[data-theme="dark"] :is(.summary-status,.status-line,.kpi-card,.report-status,.project-completion-toggle,.evolution-filters button) { border-color:var(--line); }
+:root[data-theme="dark"] :is(.summary-status,.status-line,.kpi-card,.report-status,.project-completion-toggle,.dashboard-filter-toolbar,.dashboard-project-filters button) { border-color:var(--line); }
 :root[data-theme="dark"] :is(.summary-status,.status-line,.kpi-card.primary,.kpi-card.good,.report-status.ok,.report-status.success) { background:#203b30; color:#a6d8b8; }
 :root[data-theme="dark"] .summary-status.completed { background:#203b30; color:#a6d8b8; }
-:root[data-theme="dark"] .evolution-filters button[aria-pressed="true"] { background:var(--brand); color:#fff; border-color:var(--brand); }
+:root[data-theme="dark"] .dashboard-filter-toolbar { background:var(--panel); }
+:root[data-theme="dark"] .dashboard-project-filters button[aria-pressed="true"] { background:var(--brand); color:#fff; border-color:var(--brand); }
 :root[data-theme="dark"] .project-completion-toggle { background:var(--panel-soft); color:var(--ink); }
 :root[data-theme="dark"] :is(.summary-status.risk,.summary-status.construction,.status-line.warn,.kpi-card.bad,.report-status.late,.report-status.construction) { background:#3b3022; color:#f0c681; }
 :root[data-theme="dark"] :is(.summary-status.error,.status-line.error,.report-status.error,.priority-urgent,.overdue-label) { background:#40272b; color:#f2a4a7; }

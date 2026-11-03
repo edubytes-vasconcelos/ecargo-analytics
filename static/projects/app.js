@@ -99,7 +99,7 @@ let selectedProjectId = localStorage.getItem("selectedProjectId") || null;
 let draggedDashboardCard = null;
 let draggedDashboardSection = null;
 let percentageAlignmentFrame = null;
-let dashboardProjectFilter = "all";
+let dashboardProjectFilter = "active";
 let editingWorkItemId = null;
 let editingWorkItemRev = 0;
 let workItemProjectId = null;
@@ -750,8 +750,11 @@ function renderDashboard(projects) {
   projectsEl.innerHTML = "";
 
   const ordered = orderedDashboardProjects(projects);
-  const visibleProjects = ordered.projects.filter((project) => dashboardProjectFilter === "all" || Boolean(project.completed) === (dashboardProjectFilter === "completed"));
-  const sections = [renderWorkPlanSection(), renderDashboardSection("Evolutivas", visibleProjects, "projects", ordered.projects), renderDashboardSection("Estudos", ordered.studies, "studies")].filter(Boolean);
+  const allItems = [...ordered.projects, ...ordered.studies];
+  const visibleProjects = ordered.projects.filter(matchesDashboardProjectFilter);
+  const visibleStudies = ordered.studies.filter(matchesDashboardProjectFilter);
+  projectsEl.appendChild(renderDashboardProjectFilters(allItems));
+  const sections = [renderWorkPlanSection(), renderDashboardSection("Evolutivas", visibleProjects, "projects", ordered.projects), renderDashboardSection("Estudos", visibleStudies, "studies", ordered.studies)].filter(Boolean);
   for (const section of orderedDashboardSections(sections)) {
     projectsEl.appendChild(section);
   }
@@ -764,6 +767,26 @@ function renderDashboard(projects) {
     projectsEl.appendChild(hint);
     return;
   }
+}
+
+function matchesDashboardProjectFilter(project) {
+  return dashboardProjectFilter === "all" || Boolean(project.completed) === (dashboardProjectFilter === "completed");
+}
+
+function renderDashboardProjectFilters(items) {
+  const toolbar = document.createElement("div");
+  toolbar.className = "dashboard-filter-toolbar";
+  toolbar.innerHTML = `
+    <div class="dashboard-filter-copy"><strong>Situação dos projetos</strong><span>Filtro aplicado a evolutivas e estudos</span></div>
+    <div class="dashboard-project-filters" role="group" aria-label="Filtrar projetos por situação">
+      ${[["all", "Todos"], ["active", "Em andamento"], ["completed", "Concluídos"]].map(([value, label]) => `<button type="button" data-project-filter="${value}" aria-pressed="${dashboardProjectFilter === value}">${label}<span>${items.filter((project) => value === "all" || Boolean(project.completed) === (value === "completed")).length}</span></button>`).join("")}
+    </div>
+  `;
+  toolbar.querySelectorAll("[data-project-filter]").forEach((button) => button.addEventListener("click", () => {
+    dashboardProjectFilter = button.dataset.projectFilter;
+    renderDashboard(projectsCache);
+  }));
+  return toolbar;
 }
 
 function alignDashboardPercentages() {
@@ -857,9 +880,7 @@ function renderDashboardSection(title, items, group, allItems = items) {
     <div class="dashboard-section-head">
       <div>
         <h3>${title}</h3>
-        ${group === "projects" ? `<div class="evolution-filters" aria-label="Filtrar evolutivas">
-          ${[["all", "Todas"], ["active", "Em andamento"], ["completed", "Concluídas"]].map(([value, label]) => `<button type="button" data-project-filter="${value}" aria-pressed="${dashboardProjectFilter === value}">${label}<span>${allItems.filter((project) => value === "all" || Boolean(project.completed) === (value === "completed")).length}</span></button>`).join("")}
-        </div>` : `<span>${items.length} ${items.length === 1 ? "item" : "itens"} - ordem manual</span>`}
+        <span>${items.length} ${items.length === 1 ? "item" : "itens"} - ordem manual</span>
       </div>
       <button class="section-toggle" type="button" aria-expanded="${collapsed ? "false" : "true"}">${collapsed ? "Expandir" : "Recolher"}</button>
     </div>
@@ -867,23 +888,17 @@ function renderDashboardSection(title, items, group, allItems = items) {
   `;
   const grid = section.querySelector(".dashboard-grid");
 
-  if (group === "projects") {
-    section.querySelectorAll("[data-project-filter]").forEach((button) => button.addEventListener("click", () => {
-      dashboardProjectFilter = button.dataset.projectFilter;
-      renderDashboard(projectsCache);
-    }));
-  }
-
   for (const project of items) {
     grid.appendChild(isStudyProject(project) ? createStudyCard(project) : isConstructionProject(project) ? createConstructionCard(project) : createProjectCard(project));
   }
 
-  if (group !== "projects" || dashboardProjectFilter === "all") enableDashboardSorting(grid);
+  if (dashboardProjectFilter === "all") enableDashboardSorting(grid);
   else grid.querySelectorAll(".summary-card").forEach((card) => { card.draggable = false; card.title = ""; });
-  if (group === "projects" && !items.length) {
+  if (!items.length) {
     const empty = document.createElement("p");
     empty.className = "evolution-empty";
-    empty.textContent = dashboardProjectFilter === "completed" ? "Nenhuma evolutiva concluída." : "Nenhuma evolutiva em andamento.";
+    const noun = group === "studies" ? "estudo" : "evolutiva";
+    empty.textContent = dashboardProjectFilter === "completed" ? `Nenhum ${noun} concluído.` : `Nenhum ${noun} em andamento.`;
     grid.appendChild(empty);
   }
   section.querySelector(".section-toggle").addEventListener("click", () => toggleDashboardSection(section, group));
@@ -1000,9 +1015,9 @@ function createStudyCard(project) {
           <h3>${escapeHtml(project.name)}</h3>
           ${editTitleButtonHtml("Editar estudo")}
         </div>
-        <p>Evolutiva em estudo</p>
+        <p>${project.completed ? "Estudo finalizado" : "Evolutiva em estudo"}</p>
       </div>
-      <span class="summary-status study">Em estudo</span>
+      <div class="summary-status-stack"><span class="summary-status ${project.completed ? "completed" : "study"}">${project.completed ? "Concluído" : "Em estudo"}</span>${projectCompletionButton(project)}</div>
     </div>
     <div class="note-preview markdown-content">${markdownBlock(project.description, "Evolutiva em estudo aguardando definição de escopo, cronograma ou priorização.")}</div>
     <div class="summary-actions study-actions">
@@ -1011,6 +1026,7 @@ function createStudyCard(project) {
   `;
   card.querySelector("[data-action='edit']").addEventListener("click", () => openStudyEditor(project));
   card.querySelector("[data-action='delete']").addEventListener("click", () => deleteProject(project.id));
+  bindProjectCompletion(card, project);
   return card;
 }
 
@@ -1086,7 +1102,7 @@ function createProjectCard(project) {
 }
 
 function projectCompletionButton(project) {
-  return `<button class="project-completion-toggle" type="button" data-action="toggle-completion" aria-label="${project.completed ? "Reabrir evolutiva" : "Marcar evolutiva como concluída"}">${project.completed ? "Reabrir" : "Concluir projeto"}</button>`;
+  return `<button class="project-completion-toggle" type="button" data-action="toggle-completion" aria-label="${project.completed ? "Reabrir projeto" : "Marcar projeto como concluído"}">${project.completed ? "Reabrir" : "Concluir projeto"}</button>`;
 }
 
 function bindProjectCompletion(card, project) {

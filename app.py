@@ -2171,9 +2171,6 @@ class Handler(BaseHTTPRequestHandler):
                 if project is None:
                     self._send_json({"error": "Projeto não encontrado."}, 404)
                     return
-                if project.get("type") == "study":
-                    self._send_json({"error": "A conclusão está disponível apenas para evolutivas."}, 400)
-                    return
                 project["completed"] = completed
                 if completed:
                     project["completedAt"] = datetime.now().isoformat(timespec="seconds")
