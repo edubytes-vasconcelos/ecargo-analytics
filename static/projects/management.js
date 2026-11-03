@@ -9,6 +9,39 @@ function managementIdentity() {
   return authState.user?.id || "";
 }
 
+function renderTeamQueues(container, project, state) {
+  const items = (project.workItems || []).filter(item => !item.archived);
+  const stages = new Map(kanbanColumnOrder(project).map(id => [id,
+    (project.workItemColumns || []).find(column => column.id === id)?.title
+      || kanbanBuiltInColumns.find(column => column.id === id)?.title || id]));
+  for (const item of items) stages.set(workItemStage(item), workItemStatusLabel(project, item));
+  const people = authState.users.filter(user => user.active && (!state.teamRole || (user.workRole || "undefined") === state.teamRole));
+  const columns = [...stages].filter(([id]) => !state.teamStage || id === state.teamStage);
+  container.className = "team-queues";
+  container.innerHTML = `<p class="hint">Atividades não arquivadas deste projeto, por responsável e fila. Zero indica que não há atividade atribuída nessa fila.</p>
+    <div class="team-queue-filters"><label>Papel de trabalho<select data-team-role><option value="">Todos os papéis</option>${Object.entries(workRoles).map(([id, label]) => `<option value="${id || 'undefined'}" ${(state.teamRole || '') === (id || 'undefined') ? 'selected' : ''}>${escapeHtml(label)}</option>`).join('')}</select></label>
+    <label>Fila<select data-team-stage><option value="">Todas as filas</option>${[...stages].map(([id,label]) => `<option value="${escapeHtml(id)}" ${state.teamStage === id ? 'selected' : ''}>${escapeHtml(label)}</option>`).join('')}</select></label></div>
+    <div class="team-queue-table"><table><thead><tr><th scope="col">Pessoa</th><th scope="col">Papel</th>${columns.map(([,label]) => `<th scope="col">${escapeHtml(label)}</th>`).join('')}</tr></thead><tbody>${people.map(user => `<tr><th scope="row">${escapeHtml(user.name)}</th><td>${escapeHtml(workRoles[user.workRole] || workRoles[''])}</td>${columns.map(([stage,label]) => {
+      const count = items.filter(item => item.assigneeId === user.id && workItemStage(item) === stage).length;
+      return `<td>${count ? `<button type="button" data-team-person="${escapeHtml(user.id)}" data-team-queue="${escapeHtml(stage)}" aria-label="${escapeHtml(user.name)}: ${count} atividades em ${escapeHtml(label)}">${count}</button>` : '0'}</td>`;
+    }).join('')}</tr>`).join('')}</tbody></table></div>
+    ${people.length ? '' : '<p class="hint">Nenhuma pessoa neste papel. Um administrador pode definir os papéis em Pessoas e acesso.</p>'}
+    <p class="hint">${items.filter(item => !item.assigneeId).length} atividade(s) sem responsável cadastrado.</p><div data-team-items></div>`;
+  container.querySelector('[data-team-role]').addEventListener('change', event => { state.teamRole = event.target.value; renderTeamQueues(container, project, state); });
+  container.querySelector('[data-team-stage]').addEventListener('change', event => { state.teamStage = event.target.value; renderTeamQueues(container, project, state); });
+  container.querySelectorAll('[data-team-person]').forEach(button => button.addEventListener('click', () => {
+    const selected = items.filter(item => item.assigneeId === button.dataset.teamPerson && workItemStage(item) === button.dataset.teamQueue);
+    const details = container.querySelector('[data-team-items]');
+    details.replaceChildren();
+    for (const item of selected) {
+      const open = document.createElement('button');
+      open.type = 'button'; open.textContent = item.title;
+      open.addEventListener('click', () => openWorkItemEditor(project, item));
+      details.appendChild(open);
+    }
+  }));
+}
+
 function populateCardAssignees(item) {
   const select = document.querySelector("#workItemAssignee");
   select.replaceChildren(new Option("Sem responsável", ""));

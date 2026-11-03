@@ -16,6 +16,26 @@
   font-family: "Segoe UI", Arial, Helvetica, sans-serif;
 }
 
+.team-queues { display: grid; gap: 16px; min-width: 0; background: var(--panel); color: var(--ink); padding: 12px; border-radius: 6px; }
+.team-queue-filters { display: flex; flex-wrap: wrap; gap: 16px; }
+.team-queue-filters label { display: grid; gap: 6px; color: var(--ink); }
+.team-queue-table { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+.team-queue-table table { border-collapse: collapse; width: 100%; background: var(--panel); }
+.team-queue-table th, .team-queue-table td { padding: 12px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+.team-queue-table thead { background: var(--panel-soft); }
+.team-queue-table td { font-variant-numeric: tabular-nums; }
+.team-queues [data-team-items] { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.team-queues { display: grid; gap: 16px; min-width: 0; }
+.team-queue-filters { display: flex; flex-wrap: wrap; gap: 16px; }
+.team-queue-filters label { display: grid; gap: 6px; color: var(--ink); }
+.team-queue-table { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+.team-queue-table table { border-collapse: collapse; width: 100%; background: var(--panel); }
+.team-queue-table th, .team-queue-table td { padding: 12px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+.team-queue-table thead { background: var(--panel-soft); }
+.team-queue-table td { font-variant-numeric: tabular-nums; }
+.team-queues [data-team-items] { display: flex; flex-wrap: wrap; gap: 8px; }
+
 * {
   box-sizing: border-box;
 }

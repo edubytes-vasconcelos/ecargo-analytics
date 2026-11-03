@@ -15,6 +15,13 @@ import uuid
 from email.message import EmailMessage
 
 SESSION_TTL = 8 * 3600
+WORK_ROLES = {'', 'tester', 'po', 'developer'}
+
+
+def validate_work_role(value):
+    if not isinstance(value, str) or value not in WORK_ROLES:
+        raise ValueError('Papel de trabalho inválido.')
+    return value
 
 @contextmanager
 def database(data_dir):
@@ -25,6 +32,8 @@ def database(data_dir):
         with conn:
             conn.execute('CREATE TABLE IF NOT EXISTS auth_users (id TEXT PRIMARY KEY, payload TEXT)')
             conn.execute('CREATE TABLE IF NOT EXISTS local_users (id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, role TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, must_change INTEGER NOT NULL DEFAULT 1)')
+            if 'work_role' not in {row['name'] for row in conn.execute('PRAGMA table_info(local_users)')}:
+                conn.execute("ALTER TABLE local_users ADD COLUMN work_role TEXT NOT NULL DEFAULT ''")
             conn.execute('CREATE TABLE IF NOT EXISTS local_sessions (key TEXT PRIMARY KEY, user_id TEXT NOT NULL, csrf TEXT NOT NULL, expires REAL NOT NULL)')
             conn.execute('CREATE TABLE IF NOT EXISTS login_attempts (key TEXT PRIMARY KEY, count INTEGER NOT NULL, expires REAL NOT NULL)')
             conn.execute('CREATE TABLE IF NOT EXISTS auth_notifications (id TEXT PRIMARY KEY, user_id TEXT, payload TEXT, seen INTEGER DEFAULT 0)')
@@ -33,7 +42,7 @@ def database(data_dir):
         conn.close()
 
 def public_user(row):
-    return {'id': row['id'], 'name': row['name'], 'email': row['email'], 'role': row['role'], 'active': bool(row['active']), 'mustChangePassword': bool(row['must_change'])}
+    return {'id': row['id'], 'name': row['name'], 'email': row['email'], 'role': row['role'], 'workRole': row['work_role'], 'active': bool(row['active']), 'mustChangePassword': bool(row['must_change'])}
 
 def validate_password(password):
     if not isinstance(password, str) or not 12 <= len(password) <= 256:
@@ -59,7 +68,8 @@ def verify_password(password, encoded):
 
 DUMMY_HASH = hash_password('dummy-account-verification-only')
 
-def create_user(data_dir, name, email, password, role='collaborator', first_admin=False):
+def create_user(data_dir, name, email, password, role='collaborator', first_admin=False, work_role=''):
+    work_role = validate_work_role(work_role)
     name, email = str(name).strip(), str(email).strip().casefold()
     if not name or len(name) > 120 or not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', email) or len(email) > 254:
         raise ValueError('Informe nome e e-mail válidos.')
@@ -72,7 +82,7 @@ def create_user(data_dir, name, email, password, role='collaborator', first_admi
         if first_admin and conn.execute('SELECT 1 FROM local_users LIMIT 1').fetchone():
             raise ValueError('O administrador inicial já foi criado.')
         try:
-            conn.execute('INSERT INTO local_users (id,name,email,password_hash,role) VALUES (?,?,?,?,?)', (user_id,name,email,encoded,role))
+            conn.execute('INSERT INTO local_users (id,name,email,password_hash,role,work_role) VALUES (?,?,?,?,?,?)', (user_id,name,email,encoded,role,work_role))
         except sqlite3.IntegrityError:
             raise ValueError('Já existe uma conta com esse e-mail.')
         row = conn.execute('SELECT * FROM local_users WHERE id=?', (user_id,)).fetchone()
@@ -242,7 +252,7 @@ def handle_post(handler,path,data_dir,base_path):
         elif path=='/api/auth/users':
             payload=json_body(handler)
             password=secrets.token_urlsafe(18)
-            user=create_user(data_dir,payload.get('name',''),payload.get('email',''),password,payload.get('role','collaborator'))
+            user=create_user(data_dir,payload.get('name',''),payload.get('email',''),password,payload.get('role','collaborator'),work_role=payload.get('workRole',''))
             respond(handler,{'user':user,'initialPassword':password},201)
         elif path.endswith('/reset-password'):
             user_id=path.split('/')[-2]
@@ -269,11 +279,13 @@ def handle_post(handler,path,data_dir,base_path):
                 if not row:
                     respond(handler,{'error':'Usuário não encontrado.'},404)
                     return True
+                work_role=validate_work_role(payload.get('workRole',row['work_role']))
                 admins=conn.execute("SELECT COUNT(*) FROM local_users WHERE role='admin' AND active=1").fetchone()[0]
                 if row['role']=='admin' and row['active'] and admins<=1 and (role!='admin' or not active):
                     raise ValueError('É necessário manter pelo menos um administrador ativo.')
-                conn.execute('UPDATE local_users SET role=?,active=? WHERE id=?',(role,int(active),user_id))
-                conn.execute('DELETE FROM local_sessions WHERE user_id=?',(user_id,))
+                conn.execute('UPDATE local_users SET role=?,active=?,work_role=? WHERE id=?',(role,int(active),work_role,user_id))
+                if role != row['role'] or active != bool(row['active']):
+                    conn.execute('DELETE FROM local_sessions WHERE user_id=?',(user_id,))
             respond(handler,{'ok':True})
         else:
             with database(data_dir) as conn:

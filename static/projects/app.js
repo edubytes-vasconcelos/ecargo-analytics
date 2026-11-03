@@ -1253,6 +1253,7 @@ function renderWorkPlanSection() {
       <a class="work-plan-preview" href="${escapeHtml(imageUrl)}" target="_blank" rel="noreferrer">
         <img src="${escapeHtml(imageUrl)}" alt="Plano de trabalho" />
       </a>
+      <button type="button" data-action="open-settings">Atualizar plano de trabalho</button>
     `;
   } else {
     body.innerHTML = `
@@ -1261,10 +1262,8 @@ function renderWorkPlanSection() {
         <button type="button" data-action="open-settings">Adicionar plano de trabalho</button>
       </div>
     `;
-    body.querySelector("[data-action='open-settings']").addEventListener("click", () => {
-      settingsModal.hidden = false;
-    });
   }
+  body.querySelector("[data-action='open-settings']").addEventListener("click", () => openWorkPlanSettings());
   section.querySelector(".section-toggle").addEventListener("click", () => toggleDashboardSection(section, "work-plan"));
   return section;
 }
@@ -1853,7 +1852,7 @@ function renderWorkItems(root, project) {
   summary.querySelector("[data-clear-attention]")?.addEventListener("click", () => { state.attentionFilter = null; renderProjectDetail(project); });
 
   const viewSwitch = root.querySelector("[data-field='workItemViewSwitch']");
-  const viewOptions = [["list", "Lista"], ["status", "Por etapa"]];
+  const viewOptions = [["list", "Lista"], ["status", "Por etapa"], ["team", "Equipe e filas"]];
   if (state.workItemFilter === "bug") viewOptions.push(["grouped", "Por definição"]);
   if (state.workItemFilter !== "archived") viewOptions.push(["kanban", "Kanban"]);
   if (!viewOptions.some(([value]) => value === state.workItemView)) state.workItemView = "list";
@@ -1884,6 +1883,7 @@ function renderWorkItems(root, project) {
     renderProjectDetail(project);
   }));
   const filters = root.querySelector("[data-field='workItemFilters']");
+  filters.hidden = state.workItemView === "team";
   const filterOptions = [["all", "Todas"], ["requirement", "Requisitos"], ["technical-definition", "Definições"], ["bug", "Bugs"], ["archived", `Arquivadas (${archivedItems.length})`]];
   filters.innerHTML = filterOptions.map(([value, label]) => `<button type="button" class="${state.workItemFilter === value ? "active" : ""}" data-filter="${value}">${label}</button>`).join("");
   filters.querySelectorAll("button").forEach((button) => button.addEventListener("click", () => {
@@ -1893,6 +1893,11 @@ function renderWorkItems(root, project) {
 
   window.decorateWorkItemToolbar?.(root, project, state);
   const list = root.querySelector("[data-field='workItems']");
+  if (state.workItemView === "team") {
+    root.querySelector('.activity-search-tools')?.remove();
+    renderTeamQueues(list, project, state);
+    return;
+  }
   if (!allItems.length) {
     list.innerHTML = `<div class="work-item-empty"><strong>Nenhuma atividade registrada</strong><span>Comece pela Análise de Requisitos e vincule as próximas etapas.</span></div>`;
     return;
@@ -2969,8 +2974,19 @@ hideStudyFormButton.addEventListener("click", () => {
   studyFormPanel.hidden = true;
 });
 openSettingsButton.addEventListener("click", () => {
+  settingsModal.querySelector('.settings-block').hidden = false;
+  settingsModal.querySelector('.criteria-panel').hidden = false;
+  document.querySelector('#settingsTitle').textContent = 'Configurações de evolutivas';
+  deleteWorkPlanImageButton.hidden = false;
   settingsModal.hidden = false;
 });
+function openWorkPlanSettings() {
+  settingsModal.querySelector('.settings-block').hidden = true;
+  settingsModal.querySelector('.criteria-panel').hidden = true;
+  document.querySelector('#settingsTitle').textContent = 'Plano de trabalho';
+  deleteWorkPlanImageButton.hidden = !authState.user || authState.user.role !== 'admin' || authState.user.mustChangePassword;
+  settingsModal.hidden = false;
+}
 closeSettingsButton.addEventListener("click", () => {
   settingsModal.hidden = true;
 });
@@ -3150,7 +3166,7 @@ studyEditForm.addEventListener("submit", async (event) => {
 });
 saveNotesButton.addEventListener("click", async () => {
   if (!notesProjectId) return;
-  const response = await fetch(`${appBasePath}/api/projects/${notesProjectId}`, {
+  const response = await fetch(`${appBasePath}/api/projects/${notesProjectId}/notes`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ notes: projectNotes.value }),

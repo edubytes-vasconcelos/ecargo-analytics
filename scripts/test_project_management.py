@@ -87,6 +87,45 @@ class ProjectManagementTests(unittest.TestCase):
             row=conn.execute('SELECT password_hash FROM local_users WHERE id=?',(self.admin_user['id'],)).fetchone()
         self.assertNotIn(CHANGED,row['password_hash'])
         self.assertTrue(project_auth.verify_password(CHANGED,row['password_hash']))
+
+    def test_public_project_information_and_work_plan(self):
+        anonymous=Client(self.base)
+        result=anonymous.request('/api/projects/test/notes',{'notes':' Informação pública '},method='PATCH')
+        self.assertEqual(result['notes'],'Informação pública')
+        result=anonymous.request('/api/projects/test',{'notes':'Informações pela página anterior'},method='PATCH')
+        self.assertEqual(result['notes'],'Informações pela página anterior')
+        self.denied(401,lambda:anonymous.request('/api/projects/test',{'notes':'texto','title':'indevido'},method='PATCH'))
+        self.denied(400,lambda:anonymous.request('/api/projects/test/notes',{'notes':'texto','title':'indevido'},method='PATCH'))
+        self.denied(400,lambda:anonymous.request('/api/projects/test/notes',{'notes':123},method='PATCH'))
+        self.denied(404,lambda:anonymous.request('/api/projects/inexistente/notes',{'notes':'texto'},method='PATCH'))
+        self.denied(401,lambda:anonymous.request('/api/projects/test',{'title':'indevido'},method='PATCH'))
+        self.denied(401,lambda:self.create(anonymous))
+        self.denied(401,lambda:anonymous.request('/api/project-settings',{'attentionDelayPercent':50}))
+        self.denied(401,lambda:anonymous.request('/api/project-settings/plan-image',method='DELETE'))
+        with tempfile.TemporaryDirectory() as directory, patch.object(app,'PROJECT_PLAN_UPLOADS',Path(directory)):
+            boundary='public-plan-test'
+            raw=(f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="plano.png"\r\nContent-Type: image/png\r\n\r\n'.encode()+b'\x89PNG\r\n\x1a\n'+f'\r\n--{boundary}--\r\n'.encode())
+            result=anonymous.request('/api/project-settings/plan-image',raw=raw,content_type=f'multipart/form-data; boundary={boundary}')
+            self.assertEqual(result['workPlanImage']['name'],'plano.png')
+            self.assertTrue(Path(result['workPlanImage']['path']).is_file())
+
+    def test_work_roles_and_permissions(self):
+        result=self.admin.request('/api/auth/users',{'name':'Testador','email':uuid.uuid4().hex+'@example.test','workRole':'tester'})
+        user=result['user']
+        self.assertEqual(user['workRole'],'tester')
+        client=Client(self.base)
+        client.login(user['email'],result['initialPassword'])
+        client.change(current=result['initialPassword'])
+        path=f"/api/auth/users/{user['id']}/update"
+        self.denied(403,lambda:client.request(path,{'role':'collaborator','active':True,'workRole':'po'}))
+        self.admin.request(path,{'role':'collaborator','active':True,'workRole':'developer'})
+        identity=client.request('/api/auth/session',method='GET')['user']
+        self.assertEqual(identity['workRole'],'developer')
+        self.assertEqual(identity['role'],'collaborator')
+        self.admin.request(path,{'role':'collaborator','active':True})
+        self.assertEqual(client.request('/api/auth/session',method='GET')['user']['workRole'],'developer')
+        self.denied(400,lambda:self.admin.request(path,{'role':'collaborator','active':True,'workRole':'admin'}))
+        self.denied(400,lambda:self.admin.request('/api/auth/users',{'name':'Inválido','email':uuid.uuid4().hex+'@example.test','workRole':['tester']}))
     def test_initial_password_change_is_mandatory(self):
         email=uuid.uuid4().hex+'@example.test'
         user=self.admin.request('/api/auth/users',{'name':'Primeiro acesso','email':email})

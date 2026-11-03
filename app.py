@@ -65,7 +65,10 @@ def project_store_transaction(request_handler):
             handler.project_identity = {"id": None, "name": "Não identificado", "email": ""}
             protected = path.startswith(("/api/projects", "/api/project-settings", "/api/work-item-images"))
             public_completion = handler.command == "PATCH" and re.fullmatch(r"/api/projects/[^/]+/completion", path)
-            if handler.command in {"POST", "PATCH", "DELETE"} and protected and not public_completion:
+            public_notes = handler.command == "PATCH" and re.fullmatch(r"/api/projects/[^/]+/notes", path)
+            project_update = handler.command == "PATCH" and re.fullmatch(r"/api/projects/[^/]+", path)
+            public_plan = handler.command == "POST" and path == "/api/project-settings/plan-image"
+            if handler.command in {"POST", "PATCH", "DELETE"} and protected and not (public_completion or public_notes or public_plan or project_update):
                 identity = project_auth.require_write(handler, DATA_DIR, admin=path.startswith("/api/project-settings"))
                 if identity is None:
                     return
@@ -2221,6 +2224,27 @@ class Handler(BaseHTTPRequestHandler):
     @project_store_transaction
     def do_PATCH(self) -> None:
         path = self._route_path()
+        notes_match = re.fullmatch(r"/api/projects/([^/]+)/notes", path)
+        if notes_match:
+            try:
+                length = int(self.headers.get("Content-Length", "0") or "0")
+                if not 0 < length <= 100000:
+                    raise ValueError("Informe até 100 KB de informações.")
+                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                if not isinstance(payload, dict) or set(payload) != {"notes"} or not isinstance(payload["notes"], str):
+                    raise ValueError("Informe apenas o texto das informações.")
+                projects = read_projects()
+                project = _find_project(projects, notes_match.group(1))
+                if project is None:
+                    self._send_json({"error": "Projeto não encontrado."}, 404)
+                    return
+                project["notes"] = payload["notes"].strip()
+                project["updatedAt"] = datetime.now().isoformat(timespec="seconds")
+                write_projects(projects)
+                self._send_json({"id": project["id"], "notes": project["notes"]})
+            except (ValueError, UnicodeDecodeError) as exc:
+                self._send_json({"error": str(exc)}, 400)
+            return
         completion_match = re.fullmatch(r"/api/projects/([^/]+)/completion", path)
         if completion_match:
             try:
@@ -2344,6 +2368,15 @@ class Handler(BaseHTTPRequestHandler):
         try:
             length = int(self.headers.get("Content-Length", "0") or "0")
             payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+            if not isinstance(payload, dict):
+                raise ValueError("Dados inválidos.")
+            # Older open pages save information through the project update route.
+            notes_only = set(payload) == {"notes"} and isinstance(payload["notes"], str)
+            if not notes_only:
+                identity = project_auth.require_write(self, DATA_DIR)
+                if identity is None:
+                    return
+                self.project_identity = identity["user"]
             projects = read_projects()
             updated = None
             for project in projects:

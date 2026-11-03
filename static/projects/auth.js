@@ -1,4 +1,11 @@
 const authState = { user: null, users: [], csrfToken: null, configured: true, setupRequired: false };
+const workRoles = { "": "Sem papel definido", tester: "Testador", po: "PO", developer: "Desenvolvedor" };
+function workRoleSelect(value = "") {
+  const select = document.createElement("select");
+  for (const [key, label] of Object.entries(workRoles)) select.add(new Option(label, key));
+  select.value = value;
+  return select;
+}
 const projectNativeFetch = window.fetch.bind(window);
 const projectAuthBase = document.documentElement.dataset.basePath || "";
 const authModal = document.createElement("div");
@@ -13,6 +20,11 @@ usersModal.className = "modal";
 usersModal.hidden = true;
 usersModal.innerHTML = `<div class="modal-panel users-panel" role="dialog" aria-modal="true" aria-labelledby="localUsersTitle"><div class="modal-header"><div><h2 id="localUsersTitle">Pessoas e acesso</h2><p class="hint">Controle quem participa e o que cada pessoa pode fazer.</p></div><button id="closeLocalUsers" type="button">Fechar</button></div><div class="users-layout"><section class="user-create-panel"><h3>Adicionar pessoa</h3><form id="localUserForm" class="modal-form"><label>Nome<input id="localUserName" placeholder="Nome completo" maxlength="120" required /></label><label>E-mail<input id="localUserEmail" type="email" placeholder="pessoa@empresa.com" maxlength="254" required /></label><label>Perfil<select id="localUserRole" aria-describedby="userRoleHelp"><option value="collaborator">Colaborador</option><option value="admin">Administrador</option></select></label><p id="userRoleHelp" class="hint">Colaboradores trabalham nos projetos. Administradores também gerenciam pessoas e configurações.</p><button type="submit">Cadastrar usuário</button></form></section><section class="users-directory"><div class="users-directory-heading"><h3>Equipe <span id="localUserCount"></span></h3><label class="users-search"><span>Buscar pessoa</span><input id="localUserSearch" type="search" placeholder="Nome ou e-mail" /></label></div><div id="localUsersList"></div></section></div><p id="localUsersStatus" role="status" aria-live="polite"></p><div class="initial-password-block" hidden><output id="localInitialPassword" class="initial-password" hidden></output><button id="copyInitialPassword" type="button">Copiar senha inicial</button></div></div>`;
 document.body.appendChild(usersModal);
+const createWorkRole = workRoleSelect();
+createWorkRole.id = "localUserWorkRole";
+const createWorkRoleLabel = document.createElement("label");
+createWorkRoleLabel.append("Papel de trabalho", createWorkRole);
+document.querySelector("#localUserForm button[type=submit]").before(createWorkRoleLabel);
 
 async function loadProjectIdentity() {
   const response = await projectNativeFetch(`${projectAuthBase}/api/auth/session`, { cache: "no-store" });
@@ -35,7 +47,10 @@ function openLocalAuth(mode = "login") {
   document.querySelector("#localAuthIntro").textContent = mode === "login" ? "Sua conta conecta você aos projetos e à sua equipe." : authState.user?.mustChangePassword ? "Antes de continuar, escolha uma senha que só você conhece." : "Mantenha sua conta protegida com uma senha pessoal.";
   document.querySelector("#localLoginForm").hidden = mode !== "login";
   document.querySelector("#localPasswordForm").hidden = mode !== "password";
-  document.querySelector("#closeLocalAuth").hidden = Boolean(authState.user?.mustChangePassword);
+  const closeButton = document.querySelector("#closeLocalAuth");
+  closeButton.hidden = false;
+  closeButton.textContent = authState.user?.mustChangePassword ? "Sair" : "Fechar";
+  closeButton.setAttribute("aria-label", authState.user?.mustChangePassword ? "Sair da conta" : "Fechar");
   authModal.hidden = false;
   document.querySelector(mode === "login" ? "#localLoginEmail" : "#localCurrentPassword").focus();
 }
@@ -123,7 +138,30 @@ document.querySelector("#localPasswordForm").addEventListener("submit", event =>
     await loadProjectIdentity(); await loadProjects(); await refreshProjectNotifications();
   });
 });
-document.querySelector("#closeLocalAuth").addEventListener("click", () => { if (!authState.user?.mustChangePassword) { authModal.hidden = true; document.querySelector("#localLoginPassword").value = ""; document.querySelector("#localPasswordForm").reset(); } });
+document.querySelector("#closeLocalAuth").addEventListener("click", async event => {
+  const button = event.currentTarget;
+  if (authState.user?.mustChangePassword) {
+    button.disabled = true;
+    try {
+      await authRequest("/api/auth/logout", {});
+      document.querySelector("#localLoginForm").reset();
+      document.querySelector("#localPasswordForm").reset();
+      resetVisiblePasswords();
+      location.reload();
+    } catch (error) {
+      const status = document.querySelector("#localAuthStatus");
+      status.dataset.state = "error";
+      status.textContent = error.message;
+    } finally {
+      button.disabled = false;
+    }
+    return;
+  }
+  authModal.hidden = true;
+  document.querySelector("#localLoginPassword").value = "";
+  document.querySelector("#localPasswordForm").reset();
+  resetVisiblePasswords();
+});
 document.querySelector("#closeLocalUsers").addEventListener("click", () => { usersModal.hidden = true; document.querySelector("#localInitialPassword").textContent = ""; document.querySelector("#localInitialPassword").hidden = true; document.querySelector(".initial-password-block").hidden = true; pendingInitialPassword = ""; });
 
 let pendingInitialPassword = "";
@@ -145,23 +183,30 @@ function renderLocalUsers() {
   for (const user of authState.users.filter(user => !query || `${user.name} ${user.email}`.toLocaleLowerCase("pt-BR").includes(query))) {
     const row = document.createElement("div"); row.className = "local-user-row";
     const label = document.createElement("p"); label.textContent = user.name; const email = document.createElement("small"); email.textContent = user.email; label.appendChild(email); row.appendChild(label);
-    if (user.id === authState.user.id) { const self = document.createElement("small"); self.textContent = "Sua conta · Administrador"; row.appendChild(self); list.appendChild(row); continue; }
+    const ownAccount = user.id === authState.user.id;
     const role = document.createElement("select"); role.setAttribute("aria-label", `Perfil de ${user.name}`);
     role.add(new Option("Colaborador", "collaborator")); role.add(new Option("Administrador", "admin")); role.value = user.role;
+    role.disabled = ownAccount;
+    const workRoleLabel = document.createElement("label");
+    const workRole = workRoleSelect(user.workRole);
+    workRole.setAttribute("aria-label", `Papel de trabalho de ${user.name}`);
+    workRoleLabel.append("Papel de trabalho", workRole);
     const activeLabel = document.createElement("label"); const active = document.createElement("input"); active.type = "checkbox"; active.checked = user.active;
     activeLabel.append(active, document.createTextNode("Ativo"));
+    active.disabled = ownAccount;
     const save = document.createElement("button"); save.type = "button"; save.textContent = "Salvar acesso";
     const reset = document.createElement("button"); reset.type = "button"; reset.textContent = "Redefinir senha";
-    save.addEventListener("click", () => runAuthForm(row, document.querySelector("#localUsersStatus"), async () => { await authRequest(`/api/auth/users/${user.id}/update`, { role: role.value, active: active.checked }); await loadProjectIdentity(); renderLocalUsers(); }));
+    save.addEventListener("click", () => runAuthForm(row, document.querySelector("#localUsersStatus"), async () => { await authRequest(`/api/auth/users/${user.id}/update`, { role: role.value, active: active.checked, workRole: workRole.value }); await loadProjectIdentity(); renderLocalUsers(); }));
     reset.addEventListener("click", () => { if (!confirm(`Gerar nova senha inicial para ${user.name}? As sessões atuais serão encerradas.`)) return; runAuthForm(row, document.querySelector("#localUsersStatus"), async () => { const result = await authRequest(`/api/auth/users/${user.id}/reset-password`, {}); showInitialPassword(result.initialPassword); }); });
-    row.append(role, activeLabel, save, reset); list.appendChild(row);
+    reset.hidden = ownAccount;
+    row.append(role, workRoleLabel, activeLabel, save, reset); list.appendChild(row);
   }
   if (!list.children.length) { const empty = document.createElement("p"); empty.className = "hint"; empty.textContent = "Nenhuma pessoa encontrada. Tente outro nome ou e-mail."; list.appendChild(empty); }
 }
 document.querySelector("#localUserForm").addEventListener("submit", event => {
   event.preventDefault();
   runAuthForm(event.target, document.querySelector("#localUsersStatus"), async () => {
-    const result = await authRequest("/api/auth/users", { name: document.querySelector("#localUserName").value, email: document.querySelector("#localUserEmail").value, role: document.querySelector("#localUserRole").value });
+    const result = await authRequest("/api/auth/users", { name: document.querySelector("#localUserName").value, email: document.querySelector("#localUserEmail").value, role: document.querySelector("#localUserRole").value, workRole: createWorkRole.value });
     event.target.reset(); showInitialPassword(result.initialPassword);
     await loadProjectIdentity(); renderLocalUsers();
   });
