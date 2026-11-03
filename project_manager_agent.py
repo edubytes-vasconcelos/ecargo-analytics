@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta, timezone
 import json
 import os
+import re
 import unicodedata
 import urllib.error
 import urllib.request
@@ -359,12 +360,66 @@ def _openai_answer(project: dict, question: str, history: list[dict], include_co
     return answer
 
 
+def _activity_query(prompt: str, data: dict) -> str | None:
+    intent = normalize(prompt)
+    if not re.search(r'\b(atividades?|tarefas?|cards?|itens|listar|mostre|quais|quantas)\b', intent):
+        return None
+    if re.search(r'\b(por que|porque|sugira|recomende|analise|explique)\b', intent):
+        return None
+    if any(word in intent for word in ('atras', 'vencid', 'bloque', 'prioridad', 'proxima acao', 'prazo')):
+        return None
+    names = sorted({str(item.get('assignee') or '').strip() for item in data['items']} - {''})
+    owners = [name for name in names if re.search(r'(?<!\w)' + re.escape(normalize(name)) + r'(?!\w)', intent)]
+    requested_owner = re.search(r'\b(?:do|da|de|para)\s+(.+?)\s*[?.!]*$', intent)
+    if not owners and requested_owner:
+        candidate = re.split(r'\s+(?:em|na fila|na etapa)\s+', requested_owner.group(1))[0].strip(' ?.!')
+        owners = [name for name in names if normalize(name).startswith(candidate + ' ') or normalize(name) == candidate]
+        if not owners and candidate and not any(word in candidate for word in ('desenv', 'teste', 'homol', 'projeto')):
+            return f'Não encontrei responsável cadastrado com o nome "{candidate}" nas atividades deste projeto. Confira o nome no campo Responsável do card.'
+    if len(owners) > 1:
+        return 'Encontrei mais de um responsável. Informe o nome completo: ' + ', '.join(owners) + '.'
+    stage = None
+    if re.search(r'\bem (?:desenvolvimento|desenv)\b', intent):
+        stage = ('Em desenvolvimento', lambda item: normalize(_status(item, data['columns'])) in {'em desenv', 'em desenvolvimento', 'in progress', 'in_progress', 'progress', 'development', 'developing'})
+    elif re.search(r'\bem testes?\b', intent):
+        stage = ('Em teste', lambda item: normalize(_status(item, data['columns'])) in {'em teste', 'em testes', 'testing', 'test'})
+    elif re.search(r'\bem (?:homologacao|homol)\b', intent):
+        stage = ('Em homologação', lambda item: _is_client_homologation(item, data['columns']))
+    else:
+        matching = [(key, label) for key, label in data['columns'].items() if normalize(label) and re.search(r'(?<!\w)' + re.escape(normalize(label)) + r'(?!\w)', intent)]
+        if matching:
+            key, label = max(matching, key=lambda pair: len(pair[1]))
+            stage = (label, lambda item: str(item.get('status')) == key)
+    if not owners and not stage:
+        return None
+    items = [item for item in data['items'] if (not owners or str(item.get('assignee') or '').strip() == owners[0]) and (not stage or stage[1](item))]
+    heading = 'Atividades' + (f' de {owners[0]}' if owners else '') + (f' — {stage[0]}' if stage else '')
+    lines = [f'**{heading} ({len(items)})**']
+    if not items:
+        lines.append('Nenhuma atividade não arquivada corresponde a esse filtro neste projeto.')
+    for item in items:
+        line = f"- {_item_label(item, data['columns'])}"
+        if not owners:
+            line += f" · {item.get('assignee') or 'Sem responsável'}"
+        if due := _parse_date(item.get('dueDate')):
+            line += f" · prazo {due.strftime('%d/%m/%Y')}"
+        lines.append(line)
+    return '\n'.join(lines)
+
+
 def respond(project: dict, question: object, history: list[dict] | None = None, today: date | None = None) -> dict:
     if not supports_project(project):
         raise ValueError("O assistente está habilitado apenas para o projeto Reforma Tributária — Novas taxas e Novas adequações fiscais.")
     prompt = " ".join(str(question or "").split())[:1000]
     safe_history = [entry for entry in (history or []) if entry.get("role") in {"user", "assistant"} and entry.get("content")]
     data = _item_context(project, today)
+    activity_answer = _activity_query(prompt, data)
+    if activity_answer is not None:
+        return {
+            'answer': activity_answer, 'suggestions': [], 'provider': 'interno',
+            'model': '', 'warning': '',
+            'generatedAt': datetime.now(SAO_PAULO_TIME).isoformat(timespec='seconds'),
+        }
     intent = normalize(prompt)
     suggestions: list[dict] = []
     if any(word in intent for word in ("cobrar", "cobranca", "cobrancas", "lembrete", "follow up", "follow-up")):
