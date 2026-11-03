@@ -1918,7 +1918,9 @@ class Handler(BaseHTTPRequestHandler):
                 if project is None:
                     self._send_json({"error": "Projeto não encontrado."}, 404)
                     return
-                result = project_manager_agent.respond(project, question, history=history)
+                with project_auth.database(DATA_DIR) as connection:
+                    users = [project_auth.public_user(row) for row in connection.execute('SELECT * FROM local_users WHERE active=1 ORDER BY name')]
+                result = project_manager_agent.respond(project, question, history=history, users=users)
                 self._send_json(result)
             except json.JSONDecodeError:
                 self._send_json({"error": "Não consegui interpretar a pergunta."}, 400)

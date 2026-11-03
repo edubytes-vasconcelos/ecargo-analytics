@@ -28,6 +28,33 @@ const fs = require('node:fs');
     assert.equal(await admin.locator('#localAuthModal').isVisible(), false);
     await admin.locator('#hideStudyFormButton').click();
     await admin.waitForFunction(() => projectsCache.length > 0);
+    const uploadPattern = '**/api/projects/*/upload';
+    let releaseUpload;
+    const uploadGate = new Promise(resolve => { releaseUpload = resolve; });
+    await admin.route(uploadPattern, async route => {
+      await uploadGate;
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+    });
+    await admin.evaluate(() => {
+      scheduleUpdateProjectId = projectsCache[0].id;
+      window.scheduleFeedbackTest = updateProjectSchedule(new File(['<Project/>'], 'cronograma.xml'));
+    });
+    await admin.locator('.schedule-update-feedback[data-state="pending"]').waitFor({ state: 'visible' });
+    assert.match(await admin.locator('.schedule-update-feedback').innerText(), /Atualizando cronograma/);
+    releaseUpload();
+    await admin.evaluate(() => window.scheduleFeedbackTest);
+    assert.match(await admin.locator('.schedule-update-feedback[data-state="success"]').innerText(), /atualizado com sucesso.*cronograma.xml/);
+    await admin.locator('.schedule-update-feedback button').click();
+    assert.equal(await admin.locator('.schedule-update-feedback').isVisible(), false);
+    await admin.unroute(uploadPattern);
+    await admin.route(uploadPattern, route => route.abort());
+    await admin.evaluate(async () => {
+      scheduleUpdateProjectId = projectsCache[0].id;
+      await updateProjectSchedule(new File(['<Project/>'], 'cronograma.xml'));
+    });
+    assert.match(await admin.locator('.schedule-update-feedback[data-state="error"]').innerText(), /Não foi possível confirmar/);
+    await admin.locator('.schedule-update-feedback button').click();
+    await admin.unroute(uploadPattern);
     await admin.evaluate(() => openProject(projectsCache[0].id));
     await admin.locator('[data-action="notes"]').click();
     await admin.locator('#projectNotes').fill('Informações salvas sem login');

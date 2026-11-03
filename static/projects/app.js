@@ -102,6 +102,28 @@ scheduleUpdateInput.type = "file";
 scheduleUpdateInput.accept = ".xml,.mpp,.mpt";
 scheduleUpdateInput.hidden = true;
 document.body.appendChild(scheduleUpdateInput);
+const scheduleFeedback = document.createElement("div");
+scheduleFeedback.className = "schedule-update-feedback";
+scheduleFeedback.hidden = true;
+const scheduleFeedbackText = document.createElement("p");
+scheduleFeedbackText.setAttribute("role", "status");
+scheduleFeedbackText.setAttribute("aria-live", "polite");
+scheduleFeedbackText.setAttribute("aria-atomic", "true");
+const closeScheduleFeedback = document.createElement("button");
+closeScheduleFeedback.type = "button";
+closeScheduleFeedback.textContent = "Fechar";
+closeScheduleFeedback.setAttribute("aria-label", "Fechar mensagem de atualização do cronograma");
+closeScheduleFeedback.addEventListener("click", () => { scheduleFeedback.hidden = true; });
+scheduleFeedback.append(scheduleFeedbackText, closeScheduleFeedback);
+document.body.appendChild(scheduleFeedback);
+let scheduleUpdateBusy = false;
+
+function showScheduleFeedback(message, state) {
+  scheduleFeedback.hidden = false;
+  scheduleFeedback.dataset.state = state;
+  scheduleFeedbackText.textContent = message;
+  closeScheduleFeedback.hidden = state === "pending";
+}
 
 let projectsCache = [];
 let projectSettings = { attentionDelayPercent: 10, negativeVarianceAttention: false };
@@ -2759,33 +2781,44 @@ async function deleteProject(id) {
 }
 
 function chooseScheduleUpdate(projectId) {
+  if (scheduleUpdateBusy) { scheduleFeedback.hidden = false; return; }
   scheduleUpdateProjectId = projectId;
   scheduleUpdateInput.value = "";
   scheduleUpdateInput.click();
 }
 
 async function updateProjectSchedule(file) {
-  if (!scheduleUpdateProjectId || !file) return;
+  if (!scheduleUpdateProjectId || !file || scheduleUpdateBusy) return;
   if (!/\.(xml|mpp|mpt)$/i.test(file.name)) {
-    alert("Envie um cronograma .xml, .mpp ou .mpt.");
+    showScheduleFeedback("Envie um cronograma .xml, .mpp ou .mpt.", "error");
     return;
   }
 
+  const projectId = scheduleUpdateProjectId;
+  const projectName = projectsCache.find(project => project.id === projectId)?.name || "Projeto";
+  scheduleUpdateBusy = true;
+  scheduleUpdateInput.disabled = true;
   refreshButton.disabled = true;
+  showScheduleFeedback(`Atualizando cronograma de ${projectName}… Aguarde a conclusão.`, "pending");
   try {
     const formData = new FormData();
     formData.append("file", file);
-    const response = await fetch(`${appBasePath}/api/projects/${scheduleUpdateProjectId}/upload`, {
+    const response = await fetch(`${appBasePath}/api/projects/${projectId}/upload`, {
       method: "POST",
       body: formData,
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) {
-      alert(body.error || "Nao foi possivel atualizar o cronograma.");
+      showScheduleFeedback(body.error || "Não foi possível atualizar o cronograma. Tente novamente.", "error");
       return;
     }
     await loadProjects();
+    showScheduleFeedback(`Cronograma de ${projectName} atualizado com sucesso. Arquivo: ${file.name}.`, "success");
+  } catch {
+    showScheduleFeedback("Não foi possível confirmar a atualização do cronograma. Verifique a conexão e atualize a página antes de tentar novamente.", "error");
   } finally {
+    scheduleUpdateBusy = false;
+    scheduleUpdateInput.disabled = false;
     refreshButton.disabled = false;
   }
 }
