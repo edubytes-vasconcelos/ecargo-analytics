@@ -51,6 +51,8 @@ const workItemParentLabel = document.querySelector("#workItemParentLabel");
 const workItemParent = document.querySelector("#workItemParent");
 const workItemTitle = document.querySelector("#workItemTitle");
 const workItemDescription = document.querySelector("#workItemDescription");
+const workItemDescriptionToolbar = document.querySelector("#workItemDescriptionToolbar");
+const workItemDescriptionContent = document.querySelector("#workItemDescriptionContent");
 const sourceCodeLinksList = document.querySelector("#sourceCodeLinksList");
 const addSourceCodeLinkButton = document.querySelector("#addSourceCodeLink");
 const closeWorkItemButton = document.querySelector("#closeWorkItemButton");
@@ -174,6 +176,7 @@ function renderInlineMarkdown(value) {
   };
   let text = String(value ?? "");
 
+  text = text.replace(/\\([\\`*_{}\[\]()#+.!>|~\-])/g, (_, character) => token(escapeHtml(character)));
   text = text.replace(/`([^`]+)`/g, (_, code) => token(`<code>${escapeHtml(code)}</code>`));
   text = text.replace(/!\[([^\]]*)\]\(((?:https?:\/\/|\/)[^\s)]+)\)/g, (_, alt, src) => {
     return token(`<img class="markdown-image" src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" loading="lazy" />`);
@@ -458,6 +461,393 @@ function resetMarkdownPreview(textarea) {
     textarea._markdownPreviewButton.textContent = "Ver";
     textarea._markdownPreviewButton.title = "Pré-visualizar formatação";
   }
+}
+
+let richDescriptionSavedRange = null;
+const richDescriptionTools = [
+  ["bold", "B", "Negrito", "inline"],
+  ["italic", "I", "Itálico", "inline"],
+  ["heading", "H3", "Título", "block"],
+  ["unorderedList", "• Lista", "Lista com marcadores", "list"],
+  ["orderedList", "1. Lista", "Lista numerada", "list"],
+  ["blockquote", "Citação", "Citação", "block"],
+  ["code", "</>", "Código em linha", "inline"],
+  ["link", "Link", "Inserir link", "insert"],
+  ["image", "Imagem", "Inserir imagem", "insert"],
+];
+
+function safeRichUrl(value, allowRelative = false) {
+  const url = String(value || "").trim();
+  if (allowRelative && url.startsWith("/") && !url.startsWith("//")) return url;
+  try {
+    const parsed = new URL(url, window.location.href);
+    return ["http:", "https:"].includes(parsed.protocol) && /^https?:\/\//i.test(url) ? parsed.href : "";
+  } catch {
+    return "";
+  }
+}
+
+function escapeRichMarkdownText(value) {
+  return String(value).replace(/([\\`*_{}\[\]()#+.!>|~\-])/g, "\\$1");
+}
+
+function richInlineMarkdown(node) {
+  if (node.nodeType === Node.TEXT_NODE) return escapeRichMarkdownText(node.nodeValue || "");
+  if (node.nodeType !== Node.ELEMENT_NODE) return "";
+  const tag = node.tagName.toLowerCase();
+  const inner = Array.from(node.childNodes).map(richInlineMarkdown).join("");
+  if (["b", "strong"].includes(tag)) return `**${inner}**`;
+  if (["i", "em"].includes(tag)) return `*${inner}*`;
+  if (tag === "span" && /^(bold|[6-9]00)$/.test(node.style.fontWeight)) return `**${inner}**`;
+  if (tag === "span" && node.style.fontStyle === "italic") return `*${inner}*`;
+  if (tag === "code") return `\`${(node.textContent || "").replaceAll("`", "\\`")}\``;
+  if (tag === "br") return "\n";
+  if (tag === "img") {
+    const src = safeRichUrl(node.getAttribute("src"), true);
+    if (!src) return "";
+    const alt = String(node.getAttribute("alt") || "imagem").replace(/[\[\]]/g, "");
+    return `![${escapeRichMarkdownText(alt)}](${src.replaceAll(" ", "%20")})`;
+  }
+  if (tag === "a") {
+    const href = safeRichUrl(node.getAttribute("href"));
+    return href ? `[${inner}](${href.replaceAll(" ", "%20").replaceAll(")", "%29")})` : inner;
+  }
+  return inner;
+}
+
+function richBlockMarkdown(node) {
+  if (node.nodeType === Node.TEXT_NODE) return escapeRichMarkdownText(node.nodeValue || "");
+  if (node.nodeType !== Node.ELEMENT_NODE) return "";
+  const tag = node.tagName.toLowerCase();
+  if (tag === "br") return "\n";
+  if (tag === "ul" || tag === "ol") {
+    const items = Array.from(node.children).filter((child) => child.tagName.toLowerCase() === "li");
+    return items.map((item, index) => {
+      const inlineNodes = Array.from(item.childNodes).filter((child) => !["ul", "ol"].includes(child.tagName?.toLowerCase()));
+      const text = inlineNodes.map(richInlineMarkdown).join("").trim();
+      return `${tag === "ol" ? `${index + 1}.` : "-"} ${text}`;
+    }).join("\n") + "\n\n";
+  }
+  if (tag === "blockquote") {
+    const quote = Array.from(node.childNodes).map(richBlockMarkdown).join("").trim();
+    return quote.split("\n").map((line) => `> ${line}`).join("\n") + "\n\n";
+  }
+  if (/^h[3-5]$/.test(tag)) {
+    const level = Number(tag.slice(1)) - 2;
+    return `${"#".repeat(level)} ${Array.from(node.childNodes).map(richInlineMarkdown).join("").trim()}\n\n`;
+  }
+  if (["p", "div", "pre"].includes(tag)) {
+    return Array.from(node.childNodes).map(richBlockMarkdown).join("").trimEnd() + "\n\n";
+  }
+  return richInlineMarkdown(node) + "\n\n";
+}
+
+function richEditorMarkdown() {
+  return Array.from(workItemDescriptionContent.childNodes)
+    .map(richBlockMarkdown)
+    .join("")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function syncRichDescriptionValue() {
+  workItemDescription.value = richEditorMarkdown();
+}
+
+function setRichDescriptionValue(value) {
+  workItemDescription.value = value || "";
+  workItemDescriptionContent.innerHTML = value ? markdownBlock(value) : "";
+}
+
+function richDescriptionSelection() {
+  const selection = window.getSelection();
+  if (selection?.rangeCount && workItemDescriptionContent.contains(selection.anchorNode)) {
+    richDescriptionSavedRange = selection.getRangeAt(0).cloneRange();
+  }
+}
+
+function restoreRichDescriptionSelection() {
+  workItemDescriptionContent.focus();
+  const selection = window.getSelection();
+  if (!selection) return null;
+  selection.removeAllRanges();
+  if (richDescriptionSavedRange && workItemDescriptionContent.contains(richDescriptionSavedRange.commonAncestorContainer)) {
+    selection.addRange(richDescriptionSavedRange);
+  } else {
+    const range = document.createRange();
+    range.selectNodeContents(workItemDescriptionContent);
+    range.collapse(false);
+    selection.addRange(range);
+  }
+  return selection.getRangeAt(0);
+}
+
+function insertRichDescriptionFragment(fragment) {
+  const range = restoreRichDescriptionSelection();
+  if (!range) return;
+  range.deleteContents();
+  const lastNode = fragment.lastChild;
+  if (lastNode) range.insertNode(fragment);
+  if (lastNode?.isConnected) range.setStartAfter(lastNode);
+  range.collapse(true);
+  const selection = window.getSelection();
+  selection.removeAllRanges();
+  selection.addRange(range);
+  richDescriptionSavedRange = range.cloneRange();
+  workItemDescriptionContent.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText" }));
+}
+
+function insertRichDescriptionNode(node) {
+  const fragment = document.createDocumentFragment();
+  fragment.append(node);
+  insertRichDescriptionFragment(fragment);
+}
+
+function sanitizeRichPasteNode(node) {
+  if (node.nodeType === Node.TEXT_NODE) return document.createTextNode(node.nodeValue || "");
+  if (node.nodeType !== Node.ELEMENT_NODE) return document.createDocumentFragment();
+  const tag = node.tagName.toLowerCase();
+  if (["script", "style", "iframe", "object", "svg", "math", "form", "input", "button", "video", "audio"].includes(tag)) return document.createDocumentFragment();
+  const allowed = new Set(["p", "div", "br", "strong", "b", "em", "i", "h3", "h4", "h5", "ul", "ol", "li", "blockquote", "code", "pre", "a", "img"]);
+  if (tag === "img") {
+    const src = safeRichUrl(node.getAttribute("src"), true);
+    if (!src) return document.createDocumentFragment();
+    const image = document.createElement("img");
+    image.src = src;
+    image.alt = (node.getAttribute("alt") || "imagem").slice(0, 300);
+    image.loading = "lazy";
+    return image;
+  }
+  if (tag === "a") {
+    const href = safeRichUrl(node.getAttribute("href"));
+    const anchor = document.createElement("a");
+    if (href) {
+      anchor.href = href;
+      anchor.target = "_blank";
+      anchor.rel = "noopener noreferrer";
+    }
+    node.childNodes.forEach((child) => anchor.append(sanitizeRichPasteNode(child)));
+    return anchor;
+  }
+  if (!allowed.has(tag)) {
+    const fragment = document.createDocumentFragment();
+    node.childNodes.forEach((child) => fragment.append(sanitizeRichPasteNode(child)));
+    return fragment;
+  }
+  const clean = document.createElement(tag);
+  node.childNodes.forEach((child) => clean.append(sanitizeRichPasteNode(child)));
+  return clean;
+}
+
+function sanitizeRichPaste(html) {
+  const parsed = new DOMParser().parseFromString(html, "text/html");
+  const fragment = document.createDocumentFragment();
+  parsed.body.childNodes.forEach((child) => fragment.append(sanitizeRichPasteNode(child)));
+  return fragment;
+}
+
+async function uploadRichDescriptionImage(file, range) {
+  if (!file) return;
+  const formData = new FormData();
+  formData.append("file", file);
+  try {
+    const response = await fetch(`${appBasePath}/api/work-item-images`, { method: "POST", body: formData });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body.error || "Não foi possível enviar a imagem.");
+    if (range && workItemDescriptionContent.contains(range.commonAncestorContainer)) {
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      richDescriptionSavedRange = range;
+    }
+    const source = safeRichUrl(body.url, true);
+    if (!source) throw new Error("O endereço da imagem não é válido.");
+    const image = document.createElement("img");
+    image.src = source;
+    image.alt = body.name || file.name || "Evidência";
+    image.loading = "lazy";
+    insertRichDescriptionNode(image);
+  } catch (error) {
+    window.alert(error.message);
+  }
+}
+
+function applyRichDescriptionCommand(command) {
+  const selection = restoreRichDescriptionSelection();
+  if (!selection) return;
+  if (command === "bold") document.execCommand("bold");
+  if (command === "italic") document.execCommand("italic");
+  if (command === "heading") document.execCommand("formatBlock", false, "H3");
+  if (command === "unorderedList") document.execCommand("insertUnorderedList");
+  if (command === "orderedList") document.execCommand("insertOrderedList");
+  if (command === "blockquote") document.execCommand("formatBlock", false, "BLOCKQUOTE");
+  if (command === "code") {
+    const code = document.createElement("code");
+    if (selection.isCollapsed) code.textContent = "código";
+    else code.append(selection.extractContents());
+    selection.insertNode(code);
+    selection.selectNodeContents(code);
+    richDescriptionSavedRange = selection.getRangeAt(0).cloneRange();
+    workItemDescriptionContent.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "formatText" }));
+    return;
+  }
+  if (command === "link") {
+    const url = window.prompt("Endereço do link (https://...)");
+    const href = safeRichUrl(url);
+    if (!href) return;
+    if (!selection.isCollapsed) document.execCommand("createLink", false, href);
+    else {
+      const link = document.createElement("a");
+      link.href = href;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = url;
+      insertRichDescriptionNode(link);
+      return;
+    }
+    workItemDescriptionContent.querySelectorAll("a").forEach((link) => {
+      if (safeRichUrl(link.getAttribute("href"))) { link.target = "_blank"; link.rel = "noopener noreferrer"; }
+    });
+  }
+  richDescriptionSelection();
+  workItemDescriptionContent.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "formatText" }));
+}
+
+function updateRichDescriptionToolbarState() {
+  const selection = window.getSelection();
+  if (!selection?.anchorNode || !workItemDescriptionContent.contains(selection.anchorNode)) return;
+  const activeTags = new Set();
+  let element = selection.anchorNode.nodeType === Node.ELEMENT_NODE ? selection.anchorNode : selection.anchorNode.parentElement;
+  while (element && workItemDescriptionContent.contains(element)) {
+    activeTags.add(element.tagName.toLowerCase());
+    element = element.parentElement;
+  }
+  const active = {
+    bold: document.queryCommandState("bold"),
+    italic: document.queryCommandState("italic"),
+    heading: ["h3", "h4", "h5"].some((tag) => activeTags.has(tag)),
+    unorderedList: activeTags.has("ul"),
+    orderedList: activeTags.has("ol"),
+    blockquote: activeTags.has("blockquote"),
+    code: activeTags.has("code"),
+    link: activeTags.has("a"),
+  };
+  workItemDescriptionToolbar.querySelectorAll("[data-command]").forEach((button) => button.setAttribute("aria-pressed", String(Boolean(active[button.dataset.command]))));
+}
+
+function insertRichTransferContent(transfer) {
+  const image = imageFileFromDataTransfer(transfer);
+  if (image) {
+    uploadRichDescriptionImage(image, richDescriptionSavedRange?.cloneRange());
+    return true;
+  }
+  const html = transfer?.getData("text/html");
+  const text = transfer?.getData("text/plain");
+  if (html) {
+    insertRichDescriptionFragment(sanitizeRichPaste(html));
+    return true;
+  }
+  if (text) {
+    const fragment = document.createDocumentFragment();
+    text.split(/\r?\n/).forEach((line) => {
+      const paragraph = document.createElement("p");
+      if (line) paragraph.textContent = line;
+      else paragraph.append(document.createElement("br"));
+      fragment.append(paragraph);
+    });
+    insertRichDescriptionFragment(fragment);
+    return true;
+  }
+  return false;
+}
+
+function setRichDescriptionCaretAtPoint(x, y) {
+  let range = null;
+  if (document.caretPositionFromPoint) {
+    const position = document.caretPositionFromPoint(x, y);
+    if (position) {
+      range = document.createRange();
+      range.setStart(position.offsetNode, position.offset);
+      range.collapse(true);
+    }
+  } else if (document.caretRangeFromPoint) {
+    range = document.caretRangeFromPoint(x, y);
+  }
+  if (!range || !workItemDescriptionContent.contains(range.startContainer)) return;
+  const selection = window.getSelection();
+  selection.removeAllRanges();
+  selection.addRange(range);
+  richDescriptionSavedRange = range.cloneRange();
+}
+
+function setupRichDescriptionEditor() {
+  if (!workItemDescriptionContent || workItemDescriptionContent.dataset.ready) return;
+  workItemDescriptionContent.dataset.ready = "true";
+  document.execCommand("styleWithCSS", false, false);
+  document.querySelector("#workItemDescriptionLabel").addEventListener("click", () => workItemDescriptionContent.focus());
+  let previousGroup = null;
+  richDescriptionTools.forEach(([command, label, title, group]) => {
+    if (previousGroup && previousGroup !== group) {
+      const separator = document.createElement("span");
+      separator.className = "rich-toolbar-separator";
+      separator.setAttribute("aria-hidden", "true");
+      workItemDescriptionToolbar.append(separator);
+    }
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = label;
+    button.title = title;
+    button.setAttribute("aria-label", title);
+    button.dataset.group = group;
+    button.dataset.command = command;
+    button.addEventListener("mousedown", (event) => { event.preventDefault(); richDescriptionSelection(); });
+    button.addEventListener("click", () => {
+      if (command === "image") {
+        const range = richDescriptionSavedRange?.cloneRange();
+        const input = document.createElement("input");
+        input.type = "file";
+        input.accept = "image/png,image/jpeg,image/webp,image/gif";
+        input.addEventListener("change", () => uploadRichDescriptionImage(input.files[0], range), { once: true });
+        input.click();
+        return;
+      }
+      applyRichDescriptionCommand(command);
+    });
+    workItemDescriptionToolbar.append(button);
+    previousGroup = group;
+  });
+
+  workItemDescriptionContent.addEventListener("input", syncRichDescriptionValue);
+  workItemDescriptionContent.addEventListener("keyup", richDescriptionSelection);
+  workItemDescriptionContent.addEventListener("mouseup", richDescriptionSelection);
+  workItemDescriptionContent.addEventListener("paste", (event) => {
+    if (!event.clipboardData || (!event.clipboardData.getData("text/html") && !event.clipboardData.getData("text/plain") && !imageFileFromDataTransfer(event.clipboardData))) return;
+    event.preventDefault();
+    richDescriptionSelection();
+    insertRichTransferContent(event.clipboardData);
+  });
+  workItemDescriptionContent.addEventListener("dragover", (event) => {
+    if (imageFileFromDataTransfer(event.dataTransfer)) event.preventDefault();
+  });
+  workItemDescriptionContent.addEventListener("drop", (event) => {
+    const transfer = event.dataTransfer;
+    if (!transfer || (!transfer.getData("text/html") && !transfer.getData("text/plain") && !imageFileFromDataTransfer(transfer))) return;
+    event.preventDefault();
+    setRichDescriptionCaretAtPoint(event.clientX, event.clientY);
+    richDescriptionSelection();
+    insertRichTransferContent(transfer);
+  });
+  workItemDescriptionContent.addEventListener("keydown", (event) => {
+    if (!(event.ctrlKey || event.metaKey)) return;
+    const command = { b: "bold", i: "italic", k: "link" }[event.key.toLowerCase()];
+    if (!command) return;
+    event.preventDefault();
+    applyRichDescriptionCommand(command);
+  });
+  document.addEventListener("selectionchange", () => {
+    richDescriptionSelection();
+    updateRichDescriptionToolbarState();
+  });
 }
 
 function statusClass(status) {
@@ -1980,7 +2370,7 @@ function openWorkItemEditor(project, item = null, stage = null, preferredType = 
   if (item) workItemStatus.value = item.status;
   else if (stage) workItemStatus.value = workItemStatusForStage(workItemType.value, stage);
   workItemTitle.value = item?.title || "";
-  workItemDescription.value = item?.description || "";
+  setRichDescriptionValue(item?.description || "");
   document.querySelector('#workItemSeverity').value = item?.severity || 'medium';
   document.querySelector('#workItemEnvironment').value = item?.environment || '';
   document.querySelector('#workItemReproductionSteps').value = item?.reproductionSteps || '';
@@ -2005,7 +2395,6 @@ function openWorkItemEditor(project, item = null, stage = null, preferredType = 
   document.querySelector("#workItemCollaboration").hidden = !item;
   document.querySelector("#collaborationSaveHint").hidden = Boolean(item);
   renderCollaboration(item);
-  resetMarkdownPreview(workItemDescription);
   workItemType.disabled = Boolean(item);
   deleteWorkItemButton.hidden = !item;
   workItemModal.hidden = false;
@@ -2526,6 +2915,7 @@ workItemForm.addEventListener("submit", async (event) => {
       return;
     }
   }
+  syncRichDescriptionValue();
   const payload = {
     type: workItemType.value,
     status: workItemStatus.value,
@@ -2632,6 +3022,7 @@ copyReportButton.addEventListener("click", async () => {
     copyReportButton.setAttribute("aria-label", "Copiar status report");
   }, 1600);
 });
+setupRichDescriptionEditor();
 setupMarkdownEditors();
 loadSettings()
   .catch(() => updateCriteriaText())

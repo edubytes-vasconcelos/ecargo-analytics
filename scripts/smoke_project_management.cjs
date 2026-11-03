@@ -38,7 +38,63 @@ const fs = require('node:fs');
     const generated = (await admin.locator('#localInitialPassword').innerText()).match(/Senha inicial: ([^. ]+)/)[1];
     await admin.waitForFunction(() => projectsCache.length > 0 && authState.users.some(user => user.email === 'bruno@example.test'));
     await admin.locator('#closeLocalUsers').click();
-    await admin.evaluate(() => { const project = projectsCache[0]; openProject(project.id); openWorkItemEditor(project, project.workItems[0]); });
+    await admin.evaluate(async () => {
+      const project = projectsCache[0];
+      const item = project.workItems[0];
+      const response = await fetch(`${appBasePath}/api/projects/${project.id}/work-items/${item.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description: '**Resumo legado**\n\n- Etapa antiga', expectedRev: item.rev }),
+      });
+      if (!response.ok) throw new Error('Falha ao preparar descrição Markdown legada.');
+      await loadProjects();
+      const refreshed = projectsCache[0];
+      openProject(refreshed.id);
+      openWorkItemEditor(refreshed, refreshed.workItems[0]);
+    });
+    const description = admin.locator('#workItemDescriptionContent');
+    assert.equal(await description.locator('strong').first().textContent(), 'Resumo legado');
+    assert.equal(await description.locator('ul li').first().textContent(), 'Etapa antiga');
+    await description.evaluate(editor => {
+      editor.innerHTML = 'Descrição visual preservada';
+      editor.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' }));
+    });
+    await description.focus();
+    await description.press('Control+A');
+    await admin.locator('#workItemDescriptionToolbar [data-command="bold"]').click();
+    assert.equal(await admin.locator('#workItemDescription').inputValue(), '**Descrição visual preservada**');
+    await description.evaluate(editor => {
+      const range = document.createRange();
+      range.selectNodeContents(editor);
+      range.collapse(false);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      richDescriptionSelection();
+    });
+    await description.evaluate(editor => {
+      const data = new DataTransfer();
+      const bytes = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII='), c => c.charCodeAt(0));
+      data.items.add(new File([bytes], 'description.png', { type: 'image/png' }));
+      editor.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+    });
+    await description.locator('img').waitFor({ state: 'visible' });
+    assert((await admin.locator('#workItemDescription').inputValue()).includes('!['));
+    await description.evaluate(editor => {
+      const range = document.createRange();
+      range.selectNodeContents(editor);
+      range.collapse(false);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      richDescriptionSelection();
+      const data = new DataTransfer();
+      data.setData('text/html', '<p><strong>Trecho colado</strong><script>window.__richPasteXss = true</script></p>');
+      data.setData('text/plain', 'Trecho colado');
+      editor.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+    });
+    assert.equal(await description.locator('script').count(), 0);
+    assert.equal(await admin.evaluate(() => window.__richPasteXss === true), false);
     const userId = await admin.evaluate(() => authState.users.find(user => user.email === 'bruno@example.test').id);
     await admin.locator('#workItemAssignee').selectOption(userId);
     await admin.locator('#workItemPriority').selectOption('urgent');
@@ -52,6 +108,8 @@ const fs = require('node:fs');
     await admin.locator('#workItemModal').waitFor({ state: 'hidden' });
     await admin.waitForFunction(id => projectsCache[0].workItems[0].assigneeId === id, userId);
     await admin.evaluate(() => openWorkItemEditor(projectsCache[0], projectsCache[0].workItems[0]));
+    assert.equal(await admin.locator('#workItemDescriptionContent strong').first().textContent(), 'Descrição visual preservada');
+    assert.equal(await admin.locator('#workItemDescriptionContent img').count(), 1);
     await admin.locator('[data-editor-tab="details"]').focus();
     await admin.keyboard.press('ArrowRight');
     assert.equal(await admin.locator('[data-editor-tab="conversation"]').getAttribute('aria-selected'), 'true');

@@ -6,7 +6,7 @@
     <title>Portal E-Cargo | Evolutivas</title>
     <script src="__BASE_PATH__/projects/theme.js?v=1"></script>
     <link rel="stylesheet" href="__BASE_PATH__/projects/styles.css?v=35" />
-    <link rel="stylesheet" href="__BASE_PATH__/projects/workspace.css?v=14" />
+    <link rel="stylesheet" href="__BASE_PATH__/projects/workspace.css?v=15" />
   </head>
   <body>
     <header class="topbar">
@@ -270,6 +270,7 @@
             <ol>
               <li>Abra uma evolutiva e encontre a área Atividades do projeto. Selecione Nova atividade para começar.</li>
               <li>Escolha o tipo: Análise de Requisitos, Definição Técnica ou Bug. Para bugs, informe severidade, ambiente, passos para reproduzir e resultados esperado e observado. Em Definição Técnica, informe até três links do código no GitHub, tipificados como Frontend, Backend e Serviço, além do pacote de implantação, se disponíveis.</li>
+              <li>Use a barra visual na Descrição para aplicar formatação. Cole imagens com Ctrl+V ou selecione Imagem. As mudanças são enviadas junto com Salvar atividade.</li>
               <li>Vincule uma Definição Técnica à Análise de Requisitos correspondente. Vincule cada bug à Definição Técnica afetada.</li>
               <li>Defina responsável, prioridade e prazo. Use Próxima ação para registrar o próximo passo objetivo.</li>
               <li>Informe a Etapa e salve. Para dividir o trabalho, adicione itens ao Checklist e marque cada etapa conforme concluir.</li>
@@ -436,10 +437,15 @@
             <label>Prioridade<select id="workItemPriority"><option value="low">Baixa</option><option value="normal" selected>Normal</option><option value="high">Alta</option><option value="urgent">Urgente</option></select></label>
             <label>Prazo<input id="workItemDueDate" type="date" /></label>
             <label>Próxima ação<input id="workItemNextAction" /></label>
-            <label class="wide-field">
-              Descrição
-              <textarea id="workItemDescription" rows="5" data-markdown="true" placeholder="Contexto, critérios de aceite ou passos para reproduzir"></textarea>
-            </label>
+            <div class="wide-field rich-description-field">
+              <label id="workItemDescriptionLabel">Descrição</label>
+              <div class="rich-description-editor">
+                <div id="workItemDescriptionToolbar" class="rich-description-toolbar" role="toolbar" aria-label="Formatação da descrição"></div>
+                <div id="workItemDescriptionContent" class="rich-description-content" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="workItemDescriptionLabel" data-placeholder="Contexto, critérios de aceite ou passos para reproduzir"></div>
+                <p class="rich-description-hint">Selecione um trecho para formatar. Você também pode colar imagens com Ctrl+V.</p>
+                <textarea id="workItemDescription" rows="5" hidden></textarea>
+              </div>
+            </div>
             <section id="bugReportFields" class="wide-field bug-report-fields" hidden aria-label="Detalhes do bug">
               <h3>Relato do bug</h3>
               <p class="hint">Informações objetivas ajudam a equipe a reproduzir e validar a correção.</p>
@@ -506,7 +512,7 @@
     <div id="notificationModal" class="modal" hidden><div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="notificationTitle"><div class="modal-header"><h2 id="notificationTitle">Notificações</h2><button id="closeNotifications" type="button">Fechar</button></div><div id="notificationList"></div></div></div>
     <script src="__BASE_PATH__/projects/auth.js?v=4"></script>
     <script src="__BASE_PATH__/projects/management.js?v=8"></script>
-    <script src="__BASE_PATH__/projects/app.js?v=59"></script>
+    <script src="__BASE_PATH__/projects/app.js?v=60"></script>
     <script src="__BASE_PATH__/projects/mentions.js?v=1"></script>
     <script src="__BASE_PATH__/projects/workspace-ui.js?v=5"></script>
   </body>

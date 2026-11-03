@@ -24,7 +24,7 @@ Este guia mostra como registrar e acompanhar atividades de um projeto no painel,
 1. Selecione **Nova atividade**.
 2. Informe um título curto que descreva o resultado esperado.
 3. Escolha o tipo: **Análise de Requisitos**, **Definição Técnica** ou **Bug**.
-4. Escreva a descrição. Para requisitos, registre contexto e critérios de aceite. Para bugs, informe o comportamento observado, o esperado e os passos para reproduzir.
+4. Escreva a descrição no editor visual. Selecione um trecho e use a barra para aplicar negrito, itálico, título, listas, citação, código ou link. Cole uma imagem com **Ctrl+V** ou use **Imagem** na barra. Para requisitos, registre contexto e critérios de aceite; para bugs, descreva o comportamento observado, o esperado e os passos para reproduzir.
 5. Em atividades do tipo **Definição Técnica**, informe, se disponíveis, até três links de código no GitHub: um de **Frontend**, um de **Backend** e um de **Serviço**. Informe também o link do pacote de implantação.
 6. Defina a **Etapa**, o **Responsável**, a **Prioridade** e, quando aplicável, o **Prazo** e a **Próxima ação**.
 7. Use **Vincular a** para relacionar uma Definição Técnica à Análise de Requisitos correspondente ou um bug à Definição Técnica afetada.
