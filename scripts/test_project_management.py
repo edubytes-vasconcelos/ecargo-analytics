@@ -74,6 +74,13 @@ class ProjectManagementTests(unittest.TestCase):
     def denied(self,code,call):
         with self.assertRaises(urllib.error.HTTPError) as error: call()
         self.assertEqual(error.exception.code,code)
+    def test_stale_edit_is_rejected(self):
+        item=self.create()
+        path='/api/projects/test/work-items/'+item['id']
+        first=self.admin.request(path,{'title':'Primeira edição','expectedRev':item['rev']},method='PATCH')
+        self.assertEqual(first['rev'],item['rev']+1)
+        self.denied(409,lambda:self.admin.request(path,{'title':'Edição antiga','expectedRev':item['rev']},method='PATCH'))
+        self.assertEqual(self.admin.request(path,{'title':'Sem token'},method='PATCH')['title'],'Sem token')
     def test_bootstrap_and_password_storage(self):
         with self.assertRaises(ValueError): project_auth.create_user(app.DATA_DIR,'Outro','other@example.test',INITIAL,'admin',first_admin=True)
         with project_auth.database(app.DATA_DIR) as conn:

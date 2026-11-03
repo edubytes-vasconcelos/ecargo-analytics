@@ -919,6 +919,7 @@ def _work_item_from_payload(project: dict, payload: dict, item_id: str | None = 
         "comments": current.get("comments", []),
         "evidence": current.get("evidence", []),
         "history": history,
+        "rev": int(current.get("rev") or 0) + 1,
         "parentId": parent_id,
         "archived": archived,
         "archivedAt": (str(payload.get("archivedAt") or now) if archived else None),
@@ -2187,6 +2188,10 @@ class Handler(BaseHTTPRequestHandler):
                 current = next((item for item in items if str(item.get("id")) == work_item_match.group(2)), None)
                 if current is None:
                     self._send_json({"error": "Atividade não encontrada."}, 404)
+                    return
+                expected_rev = payload.get("expectedRev")
+                if expected_rev is not None and expected_rev != int(current.get("rev") or 0):
+                    self._send_json({"error": "Esta atividade foi alterada por outra pessoa. Recarregamos os dados; revise e salve novamente."}, 409)
                     return
                 updated = _work_item_from_payload(project, {**current, **payload}, str(current.get("id")))
                 for entry in updated["history"][len(current.get("history", [])):]:

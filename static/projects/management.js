@@ -44,7 +44,7 @@ function workItemMatchesAttention(item, filter) {
   const identity = managementIdentity().toLocaleLowerCase("pt-BR");
   const today = managementToday();
   if (filter === "overdue") return !done && Boolean(item.dueDate) && item.dueDate < today;
-  if (filter === "blocked") return Boolean(item.blocked || item.pendingBugs?.length);
+  if (filter === "blocked") return !done && Boolean(item.blocked || item.pendingBugs?.length);
   if (filter === "unassigned") return !done && !item.assignee?.trim();
   if (filter === "mine") return !done && Boolean(identity) && item.assigneeId?.toLocaleLowerCase("pt-BR") === identity;
   if (filter === "mentions") return Boolean(identity) && (item.comments || []).some((comment) => (comment.mentionIds || []).includes(identity));

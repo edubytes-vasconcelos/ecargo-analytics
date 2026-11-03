@@ -89,6 +89,7 @@ let draggedDashboardCard = null;
 let draggedDashboardSection = null;
 let percentageAlignmentFrame = null;
 let editingWorkItemId = null;
+let editingWorkItemRev = 0;
 let workItemProjectId = null;
 let pendingWorkItemStage = null;
 const dashboardOrderKey = "ecargo.projects.dashboardOrder";
@@ -1853,6 +1854,7 @@ function updateWorkItemFormOptions(project, selectedParentId = "") {
 function openWorkItemEditor(project, item = null, stage = null, preferredType = null) {
   workItemProjectId = project.id;
   editingWorkItemId = item?.id || null;
+  editingWorkItemRev = item?.rev || 0;
   workItemForm.reset();
   workItemModalTitle.textContent = item ? "Editar atividade" : "Nova atividade";
   pendingWorkItemStage = stage;
@@ -2397,6 +2399,7 @@ workItemForm.addEventListener("submit", async (event) => {
     checklist: editorChecklist,
     assigneeId: document.querySelector("#workItemAssignee").value.startsWith("local:") ? document.querySelector("#workItemAssignee").value : "",
   };
+  if (editingWorkItemId) payload.expectedRev = editingWorkItemRev;
   const suffix = editingWorkItemId ? `/${editingWorkItemId}` : "";
   const response = await fetch(`${appBasePath}/api/projects/${workItemProjectId}/work-items${suffix}`, {
     method: editingWorkItemId ? "PATCH" : "POST",
@@ -2406,6 +2409,7 @@ workItemForm.addEventListener("submit", async (event) => {
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
     alert(body.error || "Nao foi possivel salvar a atividade.");
+    if (response.status === 409) await loadProjects();
     return;
   }
   markEditorSaved();
