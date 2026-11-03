@@ -164,7 +164,7 @@ const workItemTypes = {
 const workItemStatuses = {
   requirement: { backlog: "Não iniciada", analysis: "Em análise", approved: "Aprovada", blocked: "Bloqueada" },
   "technical-definition": { backlog: "Não iniciada", definition: "Em definição", "ready-for-test": "Pronta para teste", testing: "Em teste", done: "Concluída", blocked: "Bloqueada" },
-  bug: { open: "Aberto", fixing: "Em correção", "ready-for-retest": "Pronto para reteste", blocked: "Bloqueado", closed: "Fechado" },
+  bug: { open: "Aberto", fixing: "Em correção", "ready-for-retest": "Pronto para teste", blocked: "Bloqueado", closed: "Corrigido" },
 };
 
 function formatDate(value, withTime = false) {
@@ -2056,6 +2056,7 @@ function workItemStage(item) {
 }
 
 function workItemStatusLabel(project, item) {
+  if (item.type === 'bug' && workItemStatuses.bug[item.status]) return workItemStatuses.bug[item.status];
   const stage = workItemStage(item);
   return (project.workItemColumns || []).find(column => column.id === stage)?.title
     || kanbanBuiltInColumns.find(column => column.id === stage)?.title
@@ -2078,6 +2079,12 @@ function workItemWorkflowColumns(project, item = null, includeCurrent = true) {
 }
 
 function workItemStatusOptions(project, item, includeCurrent = true) {
+  if (item.type === 'bug') {
+    const options = { open: 'Aberto', fixing: 'Em correção', 'ready-for-retest': 'Pronto para teste' };
+    if (canConfirmBug() || item.status === 'closed') options.closed = 'Corrigido — validado em teste';
+    if (includeCurrent && item.status && !options[item.status]) options[item.status] = `${workItemStatusLabel(project, item)} (situação atual)`;
+    return options;
+  }
   const currentStage = workItemStage(item);
   return Object.fromEntries(workItemWorkflowColumns(project, item, includeCurrent).map(column => {
     const preserveValue = column.id === currentStage && Boolean(workItemStatuses[item.type]?.[item.status]);
@@ -2086,12 +2093,19 @@ function workItemStatusOptions(project, item, includeCurrent = true) {
   }).filter(([value]) => value));
 }
 
+function workItemTransitionBlock(project, item, status) {
+  if (item.type === 'bug' || !item.pendingBugs?.length) return '';
+  const title = (project.workItemColumns || []).find(column => column.id === status)?.title || status;
+  if (status === 'done' || /homol/i.test(title)) return `${item.pendingBugs.length} bug(s) aguardam confirmação do testador`;
+  return '';
+}
+
 function statusPillHtml(project, item) {
   const options = workItemStatusOptions(project, item);
   return `<details class="status-pill-menu">
     <summary class="work-status status-${escapeHtml(item.status)}" title="Mover para outra etapa" aria-label="Etapa: ${escapeHtml(workItemStatusLabel(project, item))}. Mover para outra etapa">${escapeHtml(workItemStatusLabel(project, item))}</summary>
     <div class="status-pill-popover">
-      ${Object.entries(options).map(([value, label]) => `<button type="button" class="${value === item.status ? "active" : ""}" data-status="${escapeHtml(value)}">${escapeHtml(label)}</button>`).join("")}
+      ${Object.entries(options).map(([value, label]) => { const reason = workItemTransitionBlock(project, item, value); return `<button type="button" class="${value === item.status ? "active" : ""}" data-status="${escapeHtml(value)}" ${reason ? `disabled title="${escapeHtml(reason)}"` : ''}>${escapeHtml(label)}${reason ? ' — aguardando bugs' : ''}</button>`; }).join("")}
     </div>
   </details>`;
 }
@@ -2161,6 +2175,7 @@ async function submitKanbanColumn(project, title) {
 }
 
 function workItemStatusForStage(type, stage) {
+  if (type === 'bug' && ['open', 'fixing', 'ready-for-retest', 'closed'].includes(stage)) return stage;
   if (String(stage).startsWith("custom-")) return stage;
   const mappings = {
     requirement: { backlog: "backlog", progress: "analysis", blocked: "blocked", done: "approved" },
@@ -2196,6 +2211,7 @@ function kanbanAssigneeKey(item) {
 }
 
 function renderWorkItemKanban(container, visible, allItems, project, state) {
+  const bugOnly = state.workItemFilter === 'bug';
   state.kanbanOwners ||= {};
   const owners = new Map(allItems.filter(item => !item.archived).map(item => [kanbanAssigneeKey(item), item.assignee || 'Sem responsável']));
   owners.set('unassigned', 'Sem responsável');
@@ -2203,17 +2219,17 @@ function renderWorkItemKanban(container, visible, allItems, project, state) {
   const customColumns = project.workItemColumns || [];
   const customById = new Map(customColumns.filter((column) => !column.archived).map((column) => [column.id, column]));
   const builtInById = new Map(kanbanBuiltInColumns.map((column) => [column.id, column]));
-  const columns = kanbanColumnOrder(project).map((id) => customById.has(id)
+  const columns = bugOnly ? ['open', 'fixing', 'ready-for-retest', 'closed'].map(id => ({id, title:workItemStatuses.bug[id], custom:false})) : kanbanColumnOrder(project).map((id) => customById.has(id)
     ? { ...customById.get(id), custom: true }
     : { ...builtInById.get(id), custom: false }).filter(column => column.custom || !customById.size || visible.some(item => workItemStage(item) === column.id));
-  const archivedColumns = customColumns.filter((column) => column.archived);
+  const archivedColumns = bugOnly ? [] : customColumns.filter((column) => column.archived);
   container.className = "work-item-kanban";
   container.innerHTML = columns.map((column) => {
-    const columnItems = visible.filter(item => workItemStage(item) === column.id);
+    const columnItems = visible.filter(item => (bugOnly ? (['open','fixing','ready-for-retest','closed'].includes(item.status) ? item.status : 'open') : workItemStage(item)) === column.id);
     const owner = state.kanbanOwners[column.id] || '';
     const cards = columnItems.filter(item => !owner || kanbanAssigneeKey(item) === owner);
     return `<section class="kanban-column stage-${column.id}" data-kanban-stage="${escapeHtml(column.id)}">
-      <div class="kanban-column-toolbar"><div class="kanban-column-head" draggable="true"><h4>${escapeHtml(column.title)}</h4><span title="Atividades visíveis nesta lista">${owner ? `${cards.length}/${columnItems.length}` : cards.length}</span>${column.custom ? kanbanColumnMenuHtml(column) : ""}</div>
+      <div class="kanban-column-toolbar"><div class="kanban-column-head" draggable="${!bugOnly}"><h4>${escapeHtml(column.title)}</h4><span title="Atividades visíveis nesta lista">${owner ? `${cards.length}/${columnItems.length}` : cards.length}</span>${column.custom ? kanbanColumnMenuHtml(column) : ""}</div>
       <label class="kanban-owner-filter ${owner ? 'is-filtered' : ''}"><span>Responsável</span><select data-column-owner="${escapeHtml(column.id)}" aria-label="Responsável na lista ${escapeHtml(column.title)}"><option value="">Todos</option>${ownerOptions.map(([key,name]) => `<option value="${escapeHtml(key)}" ${key === owner ? 'selected' : ''}>${escapeHtml(name)}</option>`).join('')}</select></label></div>
       <div class="kanban-column-body">${cards.map((item) => {
         const parent = allItems.find((candidate) => candidate.id === item.parentId);
@@ -2230,10 +2246,10 @@ function renderWorkItemKanban(container, visible, allItems, project, state) {
           ${childCount ? `<small class="kanban-card-children">${childCount} vinculada${childCount > 1 ? "s" : ""}</small>` : ""}
         </article>`;
       }).join("") || `<span class="kanban-empty">Sem atividades</span>`}
-      <button type="button" class="kanban-add" data-action="kanban-add" data-stage="${escapeHtml(column.id)}">Adicionar cartão</button></div>
+      ${bugOnly && column.id === 'closed' && !canConfirmBug() ? '' : `<button type="button" class="kanban-add" data-action="kanban-add" data-stage="${escapeHtml(column.id)}">${bugOnly ? 'Adicionar bug' : 'Adicionar cartão'}</button>`}</div>
     </section>`;
   }).join("")
-  + (state.kanbanAddListOpen
+  + (bugOnly ? '' : state.kanbanAddListOpen
     ? `<form class="kanban-list-composer" data-action="kanban-add-list-form">
         <input type="text" name="title" placeholder="Nome da lista" data-field="kanbanNewListInput" autocomplete="off" maxlength="60" />
         <div class="kanban-list-composer-actions">
@@ -2271,7 +2287,7 @@ function renderWorkItemKanban(container, visible, allItems, project, state) {
     openWorkItemEditor(project, null, button.dataset.stage, preferredType);
   }));
   enableKanbanDragging(container, allItems, project);
-  enableKanbanColumnDragging(container, project);
+  if (!bugOnly) enableKanbanColumnDragging(container, project);
 
   container.querySelectorAll("[data-action='archive-kanban-column']").forEach((button) => button.addEventListener("click", async () => {
     const columnId = button.closest("[data-kanban-stage]").dataset.kanbanStage;
@@ -2411,20 +2427,37 @@ async function reorderKanbanColumns(project, draggedId, targetId) {
 }
 
 async function updateWorkItemStatus(projectId, item, status) {
+  const project = projectsCache.find(candidate => candidate.id === projectId);
+  const reason = project && workItemTransitionBlock(project, item, status);
+  if (reason) { alert(`Não é possível avançar: ${reason}.`); return; }
+  if (item.type === 'bug' && status === 'closed' && item.status !== 'closed' && !canConfirmBug()) {
+    alert('A confirmação da correção deve ser feita por um testador ou administrador.');
+    return;
+  }
   const response = await fetch(`${appBasePath}/api/projects/${projectId}/work-items/${item.id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...item, status }),
+    body: JSON.stringify({ status, expectedRev: item.rev }),
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
     alert(body.error || "Nao foi possivel mover a atividade.");
+    if (response.status === 409) await loadProjects();
     return;
   }
   await loadProjects();
 }
 
 function bindWorkItemActions(container, allItems, project) {
+  container.querySelectorAll('[data-bug-state]').forEach(button => button.addEventListener('click', async event => {
+    event.stopPropagation();
+    const item = allItems.find(candidate => candidate.id === button.closest('[data-work-item-id]')?.dataset.workItemId);
+    if (!item) return;
+    button.disabled = true;
+    try { await updateWorkItemStatus(project.id, item, button.dataset.bugState); }
+    catch { alert('Não foi possível atualizar o bug. Verifique a conexão e tente novamente.'); }
+    finally { button.disabled = false; }
+  }));
   container.querySelectorAll("[data-action='move-work-item']").forEach(button => button.addEventListener("click", () => {
     const id = button.closest("[data-work-item-id]").dataset.workItemId;
     const item = allItems.find(candidate => candidate.id === id);
@@ -2495,7 +2528,10 @@ async function deleteWorkItem(projectId, item, allItems) {
 function updateWorkItemFormOptions(project, selectedParentId = "") {
   const type = workItemType.value;
   document.querySelector('#bugReportFields').hidden = type !== 'bug';
+  document.querySelector('#bugWorkflowPanel').hidden = type !== 'bug';
   document.querySelector('#technicalArtifactsFields').hidden = type !== 'technical-definition';
+  document.querySelector('#workItemStatusLabel').textContent = type === 'bug' ? 'Situação do bug' : 'Etapa';
+  workItemStatus.setAttribute('aria-label', type === 'bug' ? 'Situação do bug' : 'Etapa');
   const editingItem = (project.workItems || []).find(item => item.id === editingWorkItemId);
   const previousStatus = editingItem?.status || (pendingWorkItemStage ? workItemStatusForStage(type, pendingWorkItemStage) : workItemStatus.value);
   const sample = {type,status:previousStatus || Object.keys(workItemStatuses[type] || {})[0]};
@@ -2504,11 +2540,13 @@ function updateWorkItemFormOptions(project, selectedParentId = "") {
   if (statuses[previousStatus]) workItemStatus.value = previousStatus;
   const parentType = type === "technical-definition" ? "requirement" : type === "bug" ? "technical-definition" : null;
   workItemParentField.hidden = !parentType;
+  workItemParent.required = Boolean(parentType);
   if (!parentType) return;
-  workItemParentLabel.textContent = type === "bug" ? "Definição Técnica vinculada" : "Análise de Requisitos vinculada";
-  const parents = (project.workItems || []).filter((item) => item.type === parentType);
+  workItemParentLabel.textContent = type === "bug" ? "Artefato técnico vinculado" : "Análise de Requisitos vinculada";
+  const parents = (project.workItems || []).filter((item) => item.type === parentType && (!item.archived || item.id === selectedParentId));
   workItemParent.innerHTML = `<option value="">Selecione</option>${parents.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.title)}</option>`).join("")}`;
   workItemParent.value = selectedParentId || "";
+  renderBugWorkflowGuide(project);
 }
 
 const sourceCodeTypeLabels = { frontend: "Frontend", backend: "Backend", service: "Serviço" };
@@ -2561,6 +2599,7 @@ function openWorkItemEditor(project, item = null, stage = null, preferredType = 
   updateWorkItemFormOptions(project, item?.parentId || "");
   if (item) workItemStatus.value = item.status;
   else if (stage) workItemStatus.value = workItemStatusForStage(workItemType.value, stage);
+  renderBugWorkflowGuide(project);
   workItemTitle.value = item?.title || "";
   setRichDescriptionValue(item?.description || "");
   document.querySelector('#workItemSeverity').value = item?.severity || 'medium';
@@ -2591,6 +2630,14 @@ function openWorkItemEditor(project, item = null, stage = null, preferredType = 
   deleteWorkItemButton.hidden = !item;
   workItemModal.hidden = false;
   resetEditorWorkspace(project, item);
+  if (item) {
+    for (const option of workItemStatus.options) {
+      const reason = workItemTransitionBlock(project, item, option.value);
+      option.disabled = Boolean(reason);
+      option.title = reason;
+      option.textContent = option.textContent.replace(/ — aguardando bugs$/, '') + (reason ? ' — aguardando bugs' : '');
+    }
+  }
 }
 
 function closeWorkItemEditor() {

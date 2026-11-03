@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Portal E-Cargo | Evolutivas</title>
     <script src="__BASE_PATH__/projects/theme.js?v=1"></script>
-    <link rel="stylesheet" href="__BASE_PATH__/projects/styles.css?v=36" />
+    <link rel="stylesheet" href="__BASE_PATH__/projects/styles.css?v=37" />
     <link rel="stylesheet" href="__BASE_PATH__/projects/workspace.css?v=16" />
   </head>
   <body>
@@ -460,13 +460,14 @@
               </select>
             </label>
             <label>
-              Etapa
+              <span id="workItemStatusLabel">Etapa</span>
               <select id="workItemStatus" aria-label="Etapa" required></select>
             </label>
             <label id="workItemParentField" class="wide-field" hidden>
               <span id="workItemParentLabel">Vincular a</span>
               <select id="workItemParent"></select>
             </label>
+            <section id="bugWorkflowPanel" class="wide-field" hidden aria-label="Fluxo do bug"><div id="bugWorkflowGuide" class="bug-workflow-guide"></div></section>
             <label>Responsável<select id="workItemAssignee"><option value="">Sem responsável</option></select></label>
             <label>Prioridade<select id="workItemPriority"><option value="low">Baixa</option><option value="normal" selected>Normal</option><option value="high">Alta</option><option value="urgent">Urgente</option></select></label>
             <label>Prazo<input id="workItemDueDate" type="date" /></label>
@@ -482,7 +483,7 @@
             </div>
             <section id="bugReportFields" class="wide-field bug-report-fields" hidden aria-label="Detalhes do bug">
               <h3>Relato do bug</h3>
-              <p class="hint">Informações objetivas ajudam a equipe a reproduzir e validar a correção.</p>
+              <p class="hint">O desenvolvedor envia para teste. O testador confirma a correção ou devolve para correção, mesmo sem envio prévio. Registre o resultado na conversa e anexe evidências quando necessário.</p>
               <div class="bug-report-grid">
                 <label>Severidade<select id="workItemSeverity"><option value="low">Baixa</option><option value="medium" selected>Moderada</option><option value="high">Alta</option><option value="critical">Crítica</option></select></label>
                 <label>Ambiente<input id="workItemEnvironment" placeholder="Ex.: HML · Chrome · Windows" /></label>
@@ -545,8 +546,8 @@
 
     <div id="notificationModal" class="modal" hidden><div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="notificationTitle"><div class="modal-header"><h2 id="notificationTitle">Notificações</h2><button id="closeNotifications" type="button">Fechar</button></div><div id="notificationList"></div></div></div>
     <script src="__BASE_PATH__/projects/auth.js?v=7"></script>
-    <script src="__BASE_PATH__/projects/management.js?v=9"></script>
-    <script src="__BASE_PATH__/projects/app.js?v=69"></script>
+    <script src="__BASE_PATH__/projects/management.js?v=10"></script>
+    <script src="__BASE_PATH__/projects/app.js?v=70"></script>
     <script src="__BASE_PATH__/projects/mentions.js?v=2"></script>
     <script src="__BASE_PATH__/projects/workspace-ui.js?v=5"></script>
   </body>

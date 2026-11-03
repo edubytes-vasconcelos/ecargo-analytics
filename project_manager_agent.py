@@ -49,6 +49,10 @@ def _columns(project: dict) -> dict[str, str]:
 
 def _status(item: dict, columns: dict[str, str]) -> str:
     value = str(item.get("status") or "")
+    if item.get('type') == 'bug':
+        states = {'open':'Aberto', 'fixing':'Em correção', 'ready-for-retest':'Pronto para teste', 'closed':'Corrigido'}
+        if value in states:
+            return states[value]
     return columns.get(value) or value.replace("-", " ").capitalize() or "Sem status"
 
 
@@ -67,7 +71,7 @@ def _is_blocked(item: dict, columns: dict[str, str]) -> bool:
 
 
 def _is_client_homologation(item: dict, columns: dict[str, str]) -> bool:
-    return "homol" in normalize(_status(item, columns))
+    return item.get('type') != 'bug' and "homol" in normalize(_status(item, columns))
 
 
 def _active_items(project: dict) -> list[dict]:
@@ -260,6 +264,8 @@ def _openai_context(project: dict, include_comments: bool = True, include_detail
     items = []
     for item in _active_items(project)[:150]:
         current = {
+            'id': str(item.get('id') or ''),
+            'vinculada_a': str(item.get('parentId') or ''),
             "atividade": _limited_text(item.get("title"), 240),
             "tipo": _limited_text(item.get("type"), 48),
             "etapa": _limited_text(_status(item, columns), 80),
@@ -271,6 +277,11 @@ def _openai_context(project: dict, include_comments: bool = True, include_detail
             "bloqueada": bool(item.get("blocked")) or _is_blocked(item, columns),
             "atualizada_em": _limited_text(item.get("updatedAt"), 32),
         }
+        if item.get('type') == 'technical-definition':
+            current['bugs_vinculados'] = [
+                {'id': bug.get('id'), 'titulo': _limited_text(bug.get('title'), 200), 'situacao': _status(bug, columns)}
+                for bug in _active_items(project) if bug.get('type') == 'bug' and bug.get('parentId') == item.get('id')
+            ]
         if item.get("blocked") or _is_blocked(item, columns):
             current["motivo_bloqueio"] = _limited_text(item.get("blockedReason"), 300)
         if include_details:
@@ -305,6 +316,7 @@ def _openai_context(project: dict, include_comments: bool = True, include_detail
         "data_local": datetime.now(SAO_PAULO_TIME).date().isoformat(),
         "atividades_ativas": items,
         "regra_homologacao": "Atividades cuja etapa contenha 'Homol' estao aguardando validacao do cliente; nao conte como atraso ou cobranca para a equipe do projeto.",
+        'regra_fluxo_bugs': 'Bug: Aberto → Em correção → Pronto para teste → Corrigido. Somente testador ou administrador confirma Corrigido, inclusive sem envio prévio para teste. Pronto para teste ainda é pendente. A entrega técnica não pode homologar ou concluir com bugs ativos pendentes. Reabrir bug devolve o artefato para teste. A aprovação da especificação de requisitos é independente da correção da implementação.',
         "limite_de_itens": "No máximo 150 atividades não arquivadas foram incluídas; não presuma dados que não aparecem neste contexto.",
     }
     if users is not None:

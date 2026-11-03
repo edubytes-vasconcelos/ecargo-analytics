@@ -201,42 +201,65 @@ class ProjectManagementTests(unittest.TestCase):
         client.login(user['email'],CHANGED)
         with project_auth.database(app.DATA_DIR) as conn: conn.execute('UPDATE local_sessions SET expires=0 WHERE user_id=?',(user['id'],))
         self.denied(401,lambda:self.create(client))
-    def test_bugs_signal_blocking_without_moving_definition(self):
-        column = self.admin.request('/api/projects/test/work-item-columns', {'title':'Em Homol'})
+    def test_bug_correction_and_homologation_workflow(self):
+        developer, developer_user = self.collaborator()
+        tester, tester_user = self.collaborator()
+        for user, role in [(developer_user, 'developer'), (tester_user, 'tester')]:
+            self.admin.request(f"/api/auth/users/{user['id']}/update", {'role':'collaborator','active':True,'workRole':role})
+        homol = self.admin.request('/api/projects/test/work-item-columns', {'title':'Em Homol'})
+        testing = self.admin.request('/api/projects/test/work-item-columns', {'title':'Para testes Signa'})
         parent = self.create()
-        definition = self.create(type='technical-definition', parentId=parent['id'], status=column['id'])
-        path = f'/api/projects/test/work-items/{definition["id"]}'
-        def current():
-            projects = self.admin.request('/api/projects', method='GET')
-            return next(item for item in projects[0]['workItems'] if item['id'] == definition['id'])
-        bug = self.create(type='bug', parentId=definition['id'], status='open')
-        bug_path = f'/api/projects/test/work-items/{bug["id"]}'
-        self.assertEqual(current()['status'], column['id'])
-        self.assertEqual([item['id'] for item in current()['pendingBugs']], [bug['id']])
-        self.admin.request(bug_path, {'status':'ready-for-retest'}, 'PATCH')
-        self.assertEqual(current()['status'], column['id'])
-        self.assertEqual(len(current()['pendingBugs']), 1)
-        self.admin.request(bug_path, {'status':'closed'}, 'PATCH')
-        self.assertEqual(current()['pendingBugs'], [])
-        self.assertEqual(current()['status'], column['id'])
-        self.admin.request(path, {'status':'done'}, 'PATCH')
-        self.admin.request(bug_path, {'status':'fixing'}, 'PATCH')
-        self.assertEqual(current()['status'], 'done')
-        self.assertEqual(len(current()['pendingBugs']), 1)
-        self.admin.request(bug_path, {'archived':True}, 'PATCH')
-        self.assertEqual(current()['pendingBugs'], [])
-        self.admin.request(path, {'blocked':True, 'blockedReason':'Aguardando ambiente'}, 'PATCH')
-        self.assertTrue(current()['blocked'])
-        self.assertEqual(current()['status'], 'done')
-        self.admin.request(bug_path, {'archived':False}, 'PATCH')
-        second = self.create(type='technical-definition', parentId=parent['id'], status=column['id'])
-        self.admin.request(bug_path, {'parentId':second['id']}, 'PATCH')
-        self.assertEqual(current()['pendingBugs'], [])
-        self.admin.request(bug_path, method='DELETE')
-        self.admin.request(path, {'blocked':False}, 'PATCH')
-        before = app.PROJECTS_FILE.read_bytes()
-        self.assertFalse(current()['blocked'])
-        self.assertEqual(app.PROJECTS_FILE.read_bytes(), before)
+        artifact = self.create(type='technical-definition', parentId=parent['id'], status='definition')
+        path = f"/api/projects/test/work-items/{artifact['id']}"
+        parent_path = f"/api/projects/test/work-items/{parent['id']}"
+        def current(item_id):
+            project = next(p for p in self.admin.request('/api/projects',method='GET') if p['id']=='test')
+            return next(item for item in project['workItems'] if item['id']==item_id)
+        bug = self.create(developer,type='bug',parentId=artifact['id'],status='open')
+        bug_path = f"/api/projects/test/work-items/{bug['id']}"
+        self.assertEqual(current(artifact['id'])['status'],'definition')
+        developer.request(bug_path,{'status':'ready-for-retest'},'PATCH')
+        self.assertEqual(len(current(artifact['id'])['pendingBugs']),1)
+        self.denied(403,lambda:developer.request(bug_path,{'status':'closed'},'PATCH'))
+        self.denied(403,lambda:self.create(developer,type='bug',parentId=artifact['id'],status='closed'))
+        self.denied(400,lambda:self.admin.request(path,{'status':homol['id']},'PATCH'))
+        self.denied(400,lambda:self.admin.request(path,{'status':'done'},'PATCH'))
+        self.assertEqual(self.admin.request(parent_path,{'status':'approved'},'PATCH')['status'],'approved')
+        result = tester.request(bug_path,{'status':'closed'},'PATCH')
+        self.assertEqual(result['history'][-1]['authorId'],tester_user['id'])
+        self.assertEqual(current(artifact['id'])['pendingBugs'],[])
+        direct_bug = self.create(developer,type='bug',parentId=artifact['id'],status='open')
+        direct_path = f"/api/projects/test/work-items/{direct_bug['id']}"
+        result = tester.request(direct_path,{'status':'closed'},'PATCH')
+        self.assertEqual(result['status'],'closed')
+        self.assertFalse(any(entry.get('after')=='ready-for-retest' for entry in result['history']))
+        self.admin.request(path,{'status':homol['id']},'PATCH')
+        self.admin.request(parent_path,{'status':homol['id']},'PATCH')
+        developer.request(bug_path,{'status':'fixing'},'PATCH')
+        for item_id in [artifact['id'],parent['id']]:
+            item = current(item_id)
+            self.assertEqual(item['status'],testing['id'])
+            self.assertEqual([bug['id']],[entry['id'] for entry in item['pendingBugs']])
+            self.assertIn('retorno para teste',item['history'][-1]['author'])
+        tester.request(bug_path,{'status':'closed'},'PATCH')
+        self.admin.request(path,{'status':'done'},'PATCH')
+        developer.request(bug_path,{'status':'fixing'},'PATCH')
+        self.assertEqual(current(artifact['id'])['status'],testing['id'])
+
+    def test_existing_homologation_with_pending_bugs_is_reconciled_once(self):
+        project = {'id':'workflow-migration','name':'Migração de fluxo','workItemColumns':[{'id':'custom-homol','title':'Em Homol'}], 'workItems':[
+            {'id':'requirement','type':'requirement','title':'Requisito','status':'approved'},
+            {'id':'artifact','type':'technical-definition','title':'Artefato','status':'custom-homol','parentId':'requirement'},
+            {'id':'bug','type':'bug','title':'Bug pendente','status':'ready-for-retest','parentId':'artifact'}]}
+        app.write_projects(app.read_projects()+[project])
+        first = next(p for p in app.projects_payload() if p['id']==project['id'])
+        self.assertEqual(first['workItems'][0]['status'],'approved')
+        self.assertEqual(first['workItems'][1]['status'],'testing')
+        persisted = next(p for p in app.read_projects() if p['id']==project['id'])
+        history = persisted['workItems'][1]['history']
+        app.projects_payload()
+        persisted = next(p for p in app.read_projects() if p['id']==project['id'])
+        self.assertEqual(persisted['workItems'][1]['history'],history)
 
     def test_legacy_blocking_recovers_stage_once(self):
         project = {'workItemColumns':[{'id':'custom-test','title':'Em Homol'}], 'workItems':[

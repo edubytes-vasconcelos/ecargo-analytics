@@ -22,6 +22,18 @@
 .schedule-update-feedback { margin: 0; }
 .schedule-update-feedback:modal { inset: 50% auto auto 50%; transform: translate(-50%, -50%); width: min(520px, calc(100vw - 40px)); padding: 24px; }
 .schedule-update-feedback::backdrop { background: rgba(15, 30, 40, .4); }
+.bug-workflow-guide { display: grid; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-soft); }
+.bug-workflow-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; list-style: none; padding: 0; margin: 0; }
+.bug-workflow-steps li { padding: 8px; border: 1px solid var(--line); border-radius: 5px; font-size: 12px; text-align: center; background: var(--panel); color: var(--ink); }
+.bug-workflow-steps [aria-current="step"] { background: var(--brand); color: var(--panel); border-color: var(--brand); font-weight: 700; }
+.bug-workflow-actions { display: flex; flex-wrap: wrap; gap: 6px; flex-basis: 100%; }
+.bug-workflow-actions button { font-size: 12px; min-height: 32px; padding: 6px 10px; }
+.bug-parent-link { justify-self: start; max-width: 100%; white-space: normal; overflow-wrap: anywhere; text-align: left; }
+.bug-lifecycle-badge { border: 1px solid var(--line); border-left: 4px solid var(--amber); border-radius: 5px; padding: 3px 6px; font-weight: 600; }
+.bug-lifecycle-badge.state-closed { border-left-color: var(--green); }
+.bug-lifecycle-badge.state-ready-for-retest { border-left-color: var(--blue); }
+.work-item-row .bug-lifecycle-badge { display: none; }
+@media (max-width: 600px) { .bug-workflow-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .schedule-update-feedback p { overflow-wrap: anywhere; }
 .schedule-update-feedback[data-state="success"] { border-left-color: var(--green); }
 .schedule-update-feedback[data-state="error"] { border-left-color: var(--red); }

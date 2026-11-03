@@ -854,6 +854,45 @@ def _find_project(projects: list[dict], project_id: str) -> dict | None:
     return next((project for project in projects if str(project.get("id")) == project_id), None)
 
 
+def _pending_activity_bugs(project: dict, activity_id: str | None) -> list[dict]:
+    items = project.get('workItems') or []
+    by_id = {str(item.get('id')): item for item in items}
+    pending = []
+    if not activity_id:
+        return pending
+    for bug in items:
+        if bug.get('type') != 'bug' or bug.get('archived') or bug.get('status') == 'closed':
+            continue
+        parent_id = bug.get('parentId')
+        seen = set()
+        while parent_id and parent_id not in seen:
+            if str(parent_id) == str(activity_id):
+                pending.append(bug)
+                break
+            seen.add(parent_id)
+            parent_id = by_id.get(str(parent_id), {}).get('parentId')
+    return pending
+
+
+def _is_homologation(project: dict, status: str) -> bool:
+    title = next((column.get('title', '') for column in project.get('workItemColumns') or [] if column.get('id') == status), status)
+    return 'homol' in str(title).casefold()
+
+
+def _requires_validated_bugs(project: dict, status: str) -> bool:
+    return status == 'done' or _is_homologation(project, status)
+
+
+def _can_confirm_bug(handler, current: dict, updated: dict) -> bool:
+    if updated.get('type') != 'bug' or updated.get('status') != 'closed' or (current.get('type') == 'bug' and current.get('status') == 'closed'):
+        return True
+    user = handler.project_identity
+    if user.get('role') == 'admin' or user.get('workRole') == 'tester':
+        return True
+    handler._send_json({'error': 'Somente um testador ou administrador pode confirmar a correção do bug.'}, 403)
+    return False
+
+
 def _work_item_from_payload(project: dict, payload: dict, item_id: str | None = None) -> dict:
     item_type = str(payload.get("type", "")).strip()
     title = str(payload.get("title", "")).strip()
@@ -891,6 +930,17 @@ def _work_item_from_payload(project: dict, payload: dict, item_id: str | None = 
         except ValueError:
             raise ValueError("Prazo inválido.")
     current = next((item for item in items if item.get("id") == item_id), {})
+    if current.get('type') == 'bug' and item_type != 'bug':
+        raise ValueError('O tipo Bug é preservado para manter o vínculo e o histórico da correção.')
+    if parent and parent.get('archived') and not archived:
+        raise ValueError('Restaure a atividade vinculada antes de criar ou restaurar um item nela.')
+    if current and current.get('type') != item_type and any(item.get('parentId') == item_id for item in items):
+        raise ValueError('Esta atividade tem itens vinculados. Preserve o tipo para manter os vínculos.')
+    if item_type != 'bug' and _requires_validated_bugs(project, status) and not archived:
+        pending = _pending_activity_bugs(project, item_id)
+        if pending:
+            titles = '; '.join(str(bug.get('title') or 'Bug') for bug in pending[:3])
+            raise ValueError(f"Não é possível homologar ou concluir: {len(pending)} bug(s) aguardam confirmação do testador. {titles}")
     assignee_id = str(payload.get("assigneeId") or "")
     assignee = str(payload.get("assignee") or "").strip()[:120]
     if assignee_id:
@@ -1003,16 +1053,16 @@ def _normalize_legacy_blocking(project: dict) -> None:
         item.setdefault("history", []).append({"at": datetime.now().isoformat(timespec="seconds"), "field": "status", "before": "blocked", "after": stage, "author": "Sistema — separação de bloqueio e etapa"})
 
 
-def _sync_definition_blocking(project: dict, definition_id: str | None) -> None:
+def _sync_definition_blocking(project: dict, definition_id: str | None, return_to_test: bool = False) -> bool:
     if not definition_id:
-        return
+        return False
     items = project.get("workItems") or []
     definition = next(
         (item for item in items if str(item.get("id")) == str(definition_id) and item.get("type") == "technical-definition"),
         None,
     )
     if definition is None:
-        return
+        return False
     bugs = [
         item for item in items
         if item.get("type") == "bug"
@@ -1020,6 +1070,23 @@ def _sync_definition_blocking(project: dict, definition_id: str | None) -> None:
         and str(item.get("parentId")) == str(definition_id)
     ]
     definition["pendingBugs"] = [{"id": bug["id"], "title": bug["title"], "status": bug["status"]} for bug in bugs if bug.get("status") != "closed"]
+    parent = next((item for item in items if item.get('id') == definition.get('parentId')), None)
+    changed = False
+    for activity in [definition] + ([parent] if parent else []):
+        pending = _pending_activity_bugs(project, activity.get('id'))
+        activity['pendingBugs'] = [{'id': bug['id'], 'title': bug['title'], 'status': bug['status']} for bug in pending]
+        if return_to_test and pending and not activity.get('archived') and _requires_validated_bugs(project, activity.get('status', '')):
+            test_columns = [column for column in project.get('workItemColumns') or [] if not column.get('archived') and 'teste' in str(column.get('title', '')).casefold()]
+            target = next((column['id'] for column in test_columns if str(column.get('title', '')).casefold().startswith('em teste')), None)
+            target = target or (test_columns[0]['id'] if test_columns else 'testing' if activity['type'] == 'technical-definition' else 'analysis')
+            before = activity['status']
+            now = datetime.now().isoformat(timespec='seconds')
+            activity['status'] = target
+            activity['rev'] = int(activity.get('rev') or 0) + 1
+            activity['updatedAt'] = project['updatedAt'] = now
+            activity.setdefault('history', []).append({'at': now, 'field': 'status', 'before': before, 'after': target, 'author': 'Sistema — retorno para teste por bug pendente', 'authorId': None})
+            changed = True
+    return changed
 
 
 def read_project_settings() -> dict:
@@ -1709,10 +1776,14 @@ def inspect_project(project: dict, settings: dict | None = None) -> dict:
 def projects_payload() -> list[dict]:
     settings = read_project_settings()
     projects = read_projects()
+    reconciled = False
     for project in projects:
         definitions = [item for item in (project.get("workItems") or []) if item.get("type") == "technical-definition"]
         for definition in definitions:
-            _sync_definition_blocking(project, str(definition.get("id")))
+            if _sync_definition_blocking(project, str(definition.get("id")), return_to_test=True):
+                reconciled = True
+    if reconciled:
+        write_projects(projects)
     enriched = []
     for project in projects:
         try:
@@ -2029,9 +2100,11 @@ class Handler(BaseHTTPRequestHandler):
                     self._send_json({"error": "Projeto não encontrado."}, 404)
                     return
                 item = _work_item_from_payload(project, payload)
+                if not _can_confirm_bug(self, {}, item):
+                    return
                 project.setdefault("workItems", []).append(item)
                 if item["type"] == "bug":
-                    _sync_definition_blocking(project, item.get("parentId"))
+                    _sync_definition_blocking(project, item.get("parentId"), return_to_test=True)
                 project["updatedAt"] = item["updatedAt"]
                 write_projects(projects)
                 self._send_json(item, 201)
@@ -2347,6 +2420,8 @@ class Handler(BaseHTTPRequestHandler):
                     self._send_json({"error": "Esta atividade foi alterada por outra pessoa. Recarregamos os dados; revise e salve novamente."}, 409)
                     return
                 updated = _work_item_from_payload(project, {**current, **payload}, str(current.get("id")))
+                if not _can_confirm_bug(self, current, updated):
+                    return
                 for entry in updated["history"][len(current.get("history", [])):]:
                     entry["author"] = self.project_identity["name"]
                     entry["authorId"] = self.project_identity["id"]
@@ -2356,8 +2431,8 @@ class Handler(BaseHTTPRequestHandler):
                 if "archived" in payload:
                     _set_work_item_branch_archived(project, str(updated.get("id")), bool(payload.get("archived")))
                 if updated["type"] == "bug":
-                    _sync_definition_blocking(project, current.get("parentId"))
-                    _sync_definition_blocking(project, updated.get("parentId"))
+                    _sync_definition_blocking(project, current.get("parentId"), return_to_test=True)
+                    _sync_definition_blocking(project, updated.get("parentId"), return_to_test=True)
                 project["updatedAt"] = updated["updatedAt"]
                 write_projects(projects)
                 self._send_json(updated)

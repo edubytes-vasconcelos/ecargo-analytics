@@ -72,18 +72,63 @@ function workItemMatchesAttention(item, filter) {
   return true;
 }
 
+function canConfirmBug() {
+  return Boolean(authState.user && (authState.user.role === 'admin' || authState.user.workRole === 'tester'));
+}
+
+function bugWorkflowActionsHtml(item, editor = false) {
+  if (item.type !== 'bug' || item.archived || !authState.user) return '';
+  const attribute = editor ? 'data-bug-editor-state' : 'data-bug-state';
+  const actions = [];
+  if (item.status !== 'closed' && canConfirmBug()) actions.push(`<button type="button" ${attribute}="closed">Confirmar correção</button>`);
+  else if (!['ready-for-retest', 'closed'].includes(item.status)) actions.push(`<button type="button" ${attribute}="ready-for-retest">Enviar para teste</button>`);
+  if (['ready-for-retest', 'closed'].includes(item.status)) actions.push(`<button type="button" class="secondary-action" ${attribute}="fixing">${item.status === 'closed' ? 'Reabrir para correção' : 'Devolver para correção'}</button>`);
+  return actions.length ? `<div class="bug-workflow-actions">${actions.join('')}</div>` : '';
+}
+
+function renderBugWorkflowGuide(project) {
+  const root = document.querySelector('#bugWorkflowGuide');
+  if (!root || workItemType.value !== 'bug') return;
+  const item = (project.workItems || []).find(candidate => candidate.id === editingWorkItemId);
+  const status = workItemStatus.value;
+  const stages = [['open', 'Aberto'], ['fixing', 'Em correção'], ['ready-for-retest', 'Pronto para teste'], ['closed', 'Corrigido']];
+  const parent = (project.workItems || []).find(candidate => candidate.id === (workItemParent.value || item?.parentId));
+  root.innerHTML = `<ol class="bug-workflow-steps" aria-label="Situação do bug">${stages.map(([value, label]) => `<li ${status === value ? 'aria-current="step"' : ''}>${label}</li>`).join('')}</ol>
+    ${parent ? `<button type="button" class="secondary-action bug-parent-link" data-open-bug-parent>Ver artefato: ${escapeHtml(parent.title)}</button>` : '<p class="hint">Vincule este bug ao artefato técnico afetado.</p>'}
+    ${bugWorkflowActionsHtml({type: 'bug', status, archived: item?.archived}, true)}`;
+  root.querySelectorAll('[data-bug-editor-state]').forEach(button => button.addEventListener('click', () => {
+    workItemStatus.value = button.dataset.bugEditorState;
+    renderBugWorkflowGuide(project);
+    workItemForm.requestSubmit();
+  }));
+  root.querySelector('[data-open-bug-parent]')?.addEventListener('click', () => {
+    if (editorHasUnsavedChanges() && !confirm('Descartar alterações não salvas para abrir o artefato vinculado?')) return;
+    openWorkItemEditor(project, parent);
+  });
+}
+
+for (const selector of ['#workItemStatus', '#workItemParent']) {
+  document.querySelector(selector).addEventListener('change', () => {
+    const project = projectsCache.find(candidate => candidate.id === workItemProjectId);
+    if (project) renderBugWorkflowGuide(project);
+  });
+}
+
 function workItemManagementHtml(item) {
   const checklist = item.checklist || [];
   return `<div class="card-management-meta">
     <span>${escapeHtml(item.assignee || "Sem responsável")}</span>
+    ${item.type === 'bug' ? `<span class="bug-lifecycle-badge state-${escapeHtml(item.status)}">${escapeHtml(workItemStatuses.bug[item.status] || 'Aberto')}</span>` : ''}
     <span class="priority-${escapeHtml(item.priority || "normal")}">${managementPriorities[item.priority] || "Normal"}</span>
     ${item.dueDate ? `<span class="${workItemMatchesAttention(item, "overdue") ? "overdue-label" : ""}">Prazo: ${escapeHtml(formatDate(`${item.dueDate}T12:00:00`))}</span>` : ""}
     ${checklist.length ? `<span>Etapas: ${checklist.filter((entry) => entry.done).length}/${checklist.length}</span>` : ""}
     ${item.comments?.length ? `<span>${item.comments.length} mensagens</span>` : ""}
     ${item.evidence?.length ? `<span>${item.evidence.length} evidências</span>` : ""}
     ${item.nextAction ? `<small>Próxima ação: ${escapeHtml(item.nextAction)}</small>` : ""}
-    ${item.pendingBugs?.length ? `<span class="blocking-badge">Bloqueada · ${item.pendingBugs.length} bug${item.pendingBugs.length > 1 ? 's' : ''} pendente${item.pendingBugs.length > 1 ? 's' : ''}</span>` : ''}
+    ${item.pendingBugs?.length ? `<span class="blocking-badge">Homologação bloqueada · ${item.pendingBugs.length} bug${item.pendingBugs.length > 1 ? 's' : ''} pendente${item.pendingBugs.length > 1 ? 's' : ''}</span>` : ''}
+    ${item.pendingBugs?.length ? '<button type="button" class="secondary-action" data-action="edit-work-item">Revisar bugs vinculados</button>' : ''}
     ${item.blocked ? `<span class="blocking-badge">Bloqueada por outro motivo</span>${item.blockedReason ? `<small>Bloqueio: ${escapeHtml(item.blockedReason)}</small>` : ''}` : ''}
+    ${bugWorkflowActionsHtml(item)}
   </div>`;
 }
 
@@ -113,7 +158,7 @@ function collaborationItem() {
 function renderCollaboration(item) {
   const pending = document.querySelector('#workItemPendingBugs');
   pending.hidden = !item?.pendingBugs?.length;
-  pending.innerHTML = item?.pendingBugs?.length ? `<strong>Bloqueada por bugs pendentes</strong><p>A atividade permanece na etapa atual. O aviso desaparece quando todos os bugs forem fechados ou arquivados.</p>${item.pendingBugs.map(bug => `<button type="button" data-open-pending-bug="${escapeHtml(bug.id)}">${escapeHtml(bug.title)}</button>`).join('')}` : '';
+  pending.innerHTML = item?.pendingBugs?.length ? `<strong>Homologação aguardando validação dos bugs</strong><p>Confirme a correção de cada bug antes de homologar ou concluir. Abrir ou reabrir um bug devolve a atividade para teste. Clique em um bug para revisar.</p>${item.pendingBugs.map(bug => `<button type="button" data-open-pending-bug="${escapeHtml(bug.id)}">${escapeHtml(bug.title)} · ${escapeHtml(workItemStatuses.bug[bug.status] || 'Aberto')}</button>`).join('')}` : '';
   pending.querySelectorAll('[data-open-pending-bug]').forEach(button => button.addEventListener('click', () => {
     const project = projectsCache.find(project => project.id === workItemProjectId);
     const bug = project?.workItems.find(candidate => candidate.id === button.dataset.openPendingBug);
