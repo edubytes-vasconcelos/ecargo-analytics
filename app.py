@@ -894,19 +894,29 @@ def _work_item_from_payload(project: dict, payload: dict, item_id: str | None = 
         assignee = json.loads(row[0])["name"]
     payload = {**payload, "assignee": assignee, "assigneeId": assignee_id}
     history = list(current.get("history") or [])
-    fields = ("title", "status", "description", "parentId", "assignee", "assigneeId", "priority", "dueDate", "nextAction", "blocked", "blockedReason", "acceptanceCriteria", "checklist", "archived")
+    fields = ("title", "status", "description", "parentId", "assignee", "assigneeId", "priority", "dueDate", "nextAction", "blocked", "blockedReason", "acceptanceCriteria", "checklist", "archived", "severity", "environment", "reproductionSteps", "expectedResult", "actualResult", "sourcePath", "deploymentPath")
     for field in fields:
         if current and field in payload and current.get(field) != payload.get(field):
             history.append({"at": now, "field": field, "before": current.get(field), "after": payload.get(field)})
     checklist = payload.get("checklist") or []
     if not isinstance(checklist, list) or len(checklist) > 100 or any(not isinstance(entry, dict) or not str(entry.get("text", "")).strip() for entry in checklist):
         raise ValueError("Checklist inválido (máximo de 100 itens).")
+    severity = str(payload.get("severity") or "medium")
+    if severity not in {"low", "medium", "high", "critical"}:
+        raise ValueError("Severidade inválida.")
     return {
         "id": item_id or uuid.uuid4().hex,
         "type": item_type,
         "title": title,
         "status": status,
         "description": description,
+        "severity": severity if item_type == "bug" else "",
+        "environment": str(payload.get("environment") or "").strip()[:300] if item_type == "bug" else "",
+        "reproductionSteps": str(payload.get("reproductionSteps") or "").strip()[:10000] if item_type == "bug" else "",
+        "expectedResult": str(payload.get("expectedResult") or "").strip()[:5000] if item_type == "bug" else "",
+        "actualResult": str(payload.get("actualResult") or "").strip()[:5000] if item_type == "bug" else "",
+        "sourcePath": str(payload.get("sourcePath") or "").strip()[:1000] if item_type == "bug" else "",
+        "deploymentPath": str(payload.get("deploymentPath") or "").strip()[:1000] if item_type == "bug" else "",
         "assignee": assignee,
         "assigneeId": assignee_id,
         "priority": priority,

@@ -4,8 +4,9 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Portal E-Cargo | Evolutivas</title>
+    <script src="__BASE_PATH__/projects/theme.js?v=1"></script>
     <link rel="stylesheet" href="__BASE_PATH__/projects/styles.css?v=35" />
-    <link rel="stylesheet" href="__BASE_PATH__/projects/workspace.css?v=7" />
+    <link rel="stylesheet" href="__BASE_PATH__/projects/workspace.css?v=9" />
   </head>
   <body>
     <header class="topbar">
@@ -21,7 +22,11 @@
       <div class="top-actions">
         <div id="projectAuth" role="status"></div>
         <button id="notificationButton" type="button" hidden>Notificações (0)</button>
-        <button class="secondary-action" id="openHelpButton" type="button" title="Abrir manual de uso">Manual</button>
+        <button id="themeToggleButton" class="icon-button theme-toggle" type="button" aria-label="Ativar modo escuro" aria-pressed="false" title="Ativar modo escuro">
+          <svg class="theme-icon theme-icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.4 15.5A8.5 8.5 0 0 1 8.5 3.6 8.6 8.6 0 1 0 20.4 15.5Z" /></svg>
+          <svg class="theme-icon theme-icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42" /></svg>
+        </button>
+        <button class="secondary-action manual-access-button" id="openHelpButton" type="button" title="Abrir manual de uso">Manual</button>
         <button class="secondary-action" id="exportDashboardButton" type="button" title="Exportar dashboard em PDF">Exportar PDF</button>
         <button class="secondary-action" id="refreshButton" type="button" title="Atualizar cronogramas">Atualizar</button>
         <button id="openSettingsButton" class="icon-button" type="button" title="Configurações" aria-label="Configurações">
@@ -218,7 +223,10 @@
       <div class="modal-panel manual-modal" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
         <div class="modal-header">
           <h2 id="helpTitle">Manual de uso</h2>
-          <button id="closeHelpButton" type="button" title="Fechar">Fechar</button>
+          <div class="manual-header-actions">
+            <a class="manual-download-link" href="__BASE_PATH__/projects/manual-gestao-atividades.docx" download>Baixar Word</a>
+            <button id="closeHelpButton" type="button" title="Fechar">Fechar</button>
+          </div>
         </div>
         <div class="manual-content">
           <section>
@@ -257,11 +265,49 @@
             </ol>
           </section>
           <section>
-            <h3>Atividades do projeto</h3>
+            <h3>Gestão de atividades</h3>
             <ol>
-              <li>Abra uma evolutiva e use Nova atividade para registrar uma Análise de Requisitos.</li>
-              <li>Cadastre a Definição Técnica vinculada à AR correspondente.</li>
-              <li>Durante os testes, registre bugs vinculados à Definição Técnica e atualize seus status até o fechamento.</li>
+              <li>Abra uma evolutiva e encontre a área Atividades do projeto. Selecione Nova atividade para começar.</li>
+              <li>Escolha o tipo: Análise de Requisitos, Definição Técnica ou Bug. Para bugs, informe severidade, ambiente, passos para reproduzir, resultados esperado e observado e, se disponíveis, os links do código e do pacote no GitHub.</li>
+              <li>Vincule uma Definição Técnica à Análise de Requisitos correspondente. Vincule cada bug à Definição Técnica afetada.</li>
+              <li>Defina responsável, prioridade e prazo. Use Próxima ação para registrar o próximo passo objetivo.</li>
+              <li>Informe a Etapa e salve. Para dividir o trabalho, adicione itens ao Checklist e marque cada etapa conforme concluir.</li>
+            </ol>
+          </section>
+          <section>
+            <h3>Etapas e bloqueios</h3>
+            <ol>
+              <li>As listas do Kanban representam a Etapa do card. Arraste o card para outra lista ou use Mover para no menu do card.</li>
+              <li>Análises de Requisitos passam por Não iniciada, Em análise, Aprovada ou Bloqueada. Definições Técnicas passam por Não iniciada, Em definição, Pronta para teste, Em teste, Concluída ou Bloqueada.</li>
+              <li>Bugs passam por Aberto, Em correção, Pronto para reteste, Bloqueado ou Fechado. Severidade representa impacto; prioridade representa ordem de trabalho.</li>
+              <li>Use Bloqueada por outro motivo e informe a razão quando houver um impedimento manual. Bugs pendentes também aparecem como alerta na Definição Técnica e não alteram sua Etapa.</li>
+              <li>Depois que todos os bugs vinculados forem fechados ou arquivados, o alerta de pendência desaparece. A equipe atualiza a Etapa da Definição Técnica conforme o avanço real.</li>
+            </ol>
+          </section>
+          <section>
+            <h3>Kanban e filtros</h3>
+            <ol>
+              <li>Use a opção Kanban ou Lista para alternar a visualização. No Kanban, cada lista é uma etapa e cada card é uma atividade.</li>
+              <li>Use os filtros para ver tipos de atividade, atrasos, bloqueios ou itens sem responsável. O filtro de responsável dentro de cada lista também permite escolher Sem responsável.</li>
+              <li>Segure a barra de espaço e arraste com o mouse para deslocar o quadro. As listas também permitem rolagem vertical.</li>
+              <li>Abra o menu do card para mover, editar ou arquivar a atividade. Use o painel lateral do projeto para acessar resumo e ações do projeto.</li>
+            </ol>
+          </section>
+          <section>
+            <h3>Conversa, menções e evidências</h3>
+            <ol>
+              <li>Abra um card salvo e escolha Conversa para registrar decisões e dúvidas. Use Responder para manter o contexto da conversa.</li>
+              <li>Digite @ e selecione uma pessoa na lista sugerida. A pessoa selecionada e o responsável pelo card podem receber uma notificação no painel e por e-mail. O autor da mensagem não recebe notificação de si mesmo.</li>
+              <li>Na aba Evidências, arraste arquivos, selecione-os ou cole uma captura com Ctrl+V. Cada arquivo pode ter até 20 MB.</li>
+              <li>Consulte Histórico para ver as alterações registradas na atividade.</li>
+            </ol>
+          </section>
+          <section>
+            <h3>Preferências e acesso</h3>
+            <ol>
+              <li>Use o ícone de lua no cabeçalho para ativar o modo escuro; o ícone de sol volta ao modo claro. A escolha fica salva neste navegador.</li>
+              <li>É necessário entrar com uma conta ativa para criar ou editar atividades, conversar, anexar evidências e receber notificações pessoais.</li>
+              <li>Se uma menção não gerar aviso, confira se selecionou a pessoa na lista após digitar @. Escrever o nome sem selecionar não cria uma menção.</li>
             </ol>
           </section>
         </div>
@@ -393,6 +439,19 @@
               Descrição
               <textarea id="workItemDescription" rows="5" data-markdown="true" placeholder="Contexto, critérios de aceite ou passos para reproduzir"></textarea>
             </label>
+            <section id="bugReportFields" class="wide-field bug-report-fields" hidden aria-label="Detalhes do bug">
+              <h3>Relato do bug</h3>
+              <p class="hint">Informações objetivas ajudam a equipe a reproduzir e validar a correção.</p>
+              <div class="bug-report-grid">
+                <label>Severidade<select id="workItemSeverity"><option value="low">Baixa</option><option value="medium" selected>Moderada</option><option value="high">Alta</option><option value="critical">Crítica</option></select></label>
+                <label>Ambiente<input id="workItemEnvironment" placeholder="Ex.: HML · Chrome · Windows" /></label>
+                <label class="wide-field">Passos para reproduzir<textarea id="workItemReproductionSteps" rows="4" placeholder="1. Acesse...&#10;2. Selecione...&#10;3. Observe..."></textarea></label>
+                <label>Resultado esperado<textarea id="workItemExpectedResult" rows="3"></textarea></label>
+                <label>Resultado observado<textarea id="workItemActualResult" rows="3"></textarea></label>
+                <label>Caminho do código no GitHub<input id="workItemSourcePath" type="url" placeholder="https://github.com/organizacao/repositorio/..." /></label>
+                <label>Pacote de implantação no GitHub<input id="workItemDeploymentPath" type="url" placeholder="https://github.com/organizacao/repositorio/releases/..." /></label>
+              </div>
+            </section>
             <label class="wide-field manual-block"><input type="checkbox" id="workItemBlocked" /> Bloqueada por outro motivo</label>
             <label class="wide-field">Motivo do bloqueio<input id="workItemBlockedReason" /></label>
             <div id="workItemPendingBugs" class="wide-field pending-bugs" hidden></div>
@@ -441,7 +500,7 @@
     <div id="notificationModal" class="modal" hidden><div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="notificationTitle"><div class="modal-header"><h2 id="notificationTitle">Notificações</h2><button id="closeNotifications" type="button">Fechar</button></div><div id="notificationList"></div></div></div>
     <script src="__BASE_PATH__/projects/auth.js?v=4"></script>
     <script src="__BASE_PATH__/projects/management.js?v=7"></script>
-    <script src="__BASE_PATH__/projects/app.js?v=50"></script>
+    <script src="__BASE_PATH__/projects/app.js?v=51"></script>
     <script src="__BASE_PATH__/projects/mentions.js?v=1"></script>
     <script src="__BASE_PATH__/projects/workspace-ui.js?v=5"></script>
   </body>

@@ -1,0 +1,78 @@
+# Manual de uso da gestão de atividades
+
+## E-Cargo | Guia para gerentes de projeto, desenvolvimento e testes
+
+Atualizado em 3 de novembro de 2026
+
+Este guia mostra como registrar e acompanhar atividades de um projeto no painel, organizar o trabalho no Kanban, conversar sobre os cards e anexar evidências. Use o botão **Manual** no cabeçalho do aplicativo para consultar este procedimento sem sair da tela.
+
+## 1. Acessar um projeto
+
+1. Entre no portal E-Cargo e abra **Evolutivas**.
+2. Selecione o projeto que receberá as atividades.
+3. Localize a área **Atividades do projeto**. Para criar ou alterar atividades, conversar, anexar arquivos e receber notificações pessoais, entre com uma conta ativa.
+
+## 2. Registrar uma atividade
+
+1. Selecione **Nova atividade**.
+2. Informe um título curto que descreva o resultado esperado.
+3. Escolha o tipo: **Análise de Requisitos**, **Definição Técnica** ou **Bug**.
+4. Escreva a descrição. Para requisitos, registre contexto e critérios de aceite. Para bugs, informe o comportamento observado, o esperado e os passos para reproduzir.
+5. Defina a **Etapa**, o **Responsável**, a **Prioridade** e, quando aplicável, o **Prazo** e a **Próxima ação**.
+6. Use **Vincular a** para relacionar uma Definição Técnica à Análise de Requisitos correspondente ou um bug à Definição Técnica afetada.
+7. Registre **Critérios de conclusão** e inclua itens no **Checklist** quando a atividade exigir etapas menores.
+8. Se houver um impedimento manual, marque **Bloqueada por outro motivo** e descreva a causa. Salve a atividade.
+
+## 3. Organizar o trabalho no Kanban
+
+Use o seletor de visualização para alternar entre **Kanban** e **Lista**. No Kanban, cada lista representa uma etapa e cada card representa uma atividade. Arraste um card para outra lista ou use **Mover para** no menu do card. O nome da lista é a etapa do card; não há um segundo status independente.
+
+| Tipo | Etapas disponíveis |
+|---|---|
+| Análise de Requisitos | Não iniciada · Em análise · Aprovada · Bloqueada |
+| Definição Técnica | Não iniciada · Em definição · Pronta para teste · Em teste · Concluída · Bloqueada |
+| Bug | Aberto · Em correção · Pronto para reteste · Bloqueado · Fechado |
+
+Use os filtros para encontrar atividades atrasadas, bloqueadas, sem responsável, próximas do prazo, atribuídas a você ou que mencionaram você. Cada lista também tem um filtro de responsável, incluindo a opção **Sem responsável**. Segure a barra de espaço e arraste com o mouse para deslocar o quadro; cada lista pode rolar verticalmente.
+
+## 4. Registrar e acompanhar bugs
+
+1. Abra a Definição Técnica afetada e crie uma atividade do tipo **Bug**.
+2. Confirme o vínculo com a Definição Técnica e atribua um responsável.
+3. Preencha a severidade (baixa, moderada, alta ou crítica) e o ambiente (por exemplo, HML, navegador e sistema operacional).
+4. Descreva os passos para reproduzir em ordem, além do resultado esperado e do resultado observado. Anexe evidências na aba **Evidências**.
+5. Se disponíveis, informe os links do código-fonte e do pacote de implantação no GitHub.
+6. Atualize a etapa do bug conforme o trabalho avançar: **Aberto**, **Em correção**, **Pronto para reteste**, **Bloqueado** ou **Fechado**.
+7. Depois da correção, mova para **Pronto para reteste**. O testador registra o resultado na conversa e fecha o bug se a validação passar; se falhar, descreve o novo resultado e devolve o card ao fluxo de correção.
+
+Use um título curto que identifique o problema e evite incluir senhas, tokens ou dados pessoais nas evidências. A severidade indica impacto; a prioridade indica ordem de trabalho e pode ser definida separadamente.
+
+Bugs abertos vinculados a uma Definição Técnica aparecem como uma pendência nessa definição. O alerta não muda automaticamente a etapa da definição. Ele desaparece quando todos os bugs vinculados forem fechados ou arquivados. Se houver outro impedimento, registre-o separadamente em **Bloqueada por outro motivo**.
+
+## 5. Conversar e notificar pessoas
+
+1. Abra uma atividade já salva e escolha a aba **Conversa**.
+2. Escreva a mensagem. Para mencionar alguém, digite **@** e selecione a pessoa na lista sugerida. Escrever o nome sem selecionar não cria uma menção.
+3. Selecione **Enviar mensagem**. A pessoa mencionada recebe uma notificação no painel e por e-mail. O responsável também pode receber avisos; ao responder uma mensagem, seu autor também é notificado.
+4. O autor da mensagem não recebe uma notificação de si mesmo. Para pedir uma ação, mencione outra pessoa ativa.
+5. Use **Responder** para manter uma mensagem ligada ao comentário original.
+
+## 6. Anexar evidências e consultar o histórico
+
+Na aba **Evidências**, selecione arquivos, arraste-os para a área indicada ou cole uma captura de tela com **Ctrl+V**. Cada arquivo pode ter até 20 MB. Aguarde o envio terminar antes de fechar a atividade.
+
+Abra **Histórico** para consultar alterações registradas na atividade. Use o Checklist para acompanhar passos menores sem criar um card para cada ação.
+
+## 7. Usar o modo escuro
+
+No cabeçalho, selecione o ícone de lua para ativar o modo escuro. Selecione o ícone de sol para voltar ao modo claro. A escolha fica salva neste navegador e não altera a aparência dos outros usuários.
+
+## 8. Boas práticas por perfil
+
+- **Gerente de projeto:** acompanhe responsáveis, prazos e bloqueios; use filtros de atenção para preparar alinhamentos.
+- **Desenvolvedor:** registre decisões e próximas ações na atividade; mantenha o bug vinculado à Definição Técnica e atualize sua etapa.
+- **Testador:** valide cards em **Pronta para teste** ou bugs em **Pronto para reteste**; registre evidências e o resultado na conversa.
+
+## Se uma pessoa não receber a notificação
+
+Confirme se ela foi selecionada na lista de sugestões após digitar **@**, se a conta está ativa e se o comentário foi enviado. Uma menção digitada como texto comum não dispara notificação. O próprio autor da mensagem é excluído dos destinatários.

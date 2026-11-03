@@ -1,7 +1,7 @@
 /* E-Cargo workspace: restrained operational UI, clear actions and readable data. */
 [hidden] { display: none !important; }
 @media screen {
-:root { --bg:#f3f6f8; --panel:#fff; --panel-soft:#f7f9fa; --ink:#1c303d; --muted:#5c6e7a; --line:#dce4e9; --brand:#087c80; --brand-dark:#075b60; --green:#287657; --amber:#a75a20; --red:#b1373b; --blue:#326f91; --shadow:0 4px 20px rgba(23,48,64,.045); font-family:"Segoe UI Variable Text","Segoe UI",Arial,sans-serif; }
+:root { color-scheme:light; --bg:#f3f6f8; --panel:#fff; --panel-soft:#f7f9fa; --ink:#1c303d; --muted:#5c6e7a; --line:#dce4e9; --brand:#087c80; --brand-dark:#075b60; --green:#287657; --amber:#a75a20; --red:#b1373b; --blue:#326f91; --shadow:0 4px 20px rgba(23,48,64,.045); font-family:"Segoe UI Variable Text","Segoe UI",Arial,sans-serif; }
 body { background:var(--bg); font-size:14px; line-height:1.5; }
 h1,h2,h3,h4 { font-weight:650; letter-spacing:-.025em; }
 h1 { font-size:24px; line-height:1.25; }
@@ -336,7 +336,7 @@ main { width:min(1480px,calc(100% - 48px)); }
   .kanban-workspace .topbar { width:calc(100% - 16px); margin:8px 8px 0; padding:10px; gap:8px; }
   .kanban-workspace main { width:calc(100% - 16px); margin:8px 8px 0; }
   .kanban-workspace .top-actions { max-width:230px; gap:4px; }
-  .kanban-workspace .top-actions .secondary-action { display:none; }
+  .kanban-workspace .top-actions .secondary-action:not(.manual-access-button) { display:none; }
   .kanban-workspace .account-name { max-width:85px; }
   .kanban-project .card-header { padding:10px; }
   .kanban-project .card-header h3 { font-size:16px; }
@@ -473,6 +473,12 @@ main { width:min(1480px,calc(100% - 48px)); }
 }
 
 @media screen {
+.manual-header-actions { display:flex; align-items:center; gap:8px; }
+.manual-download-link { display:inline-flex; align-items:center; justify-content:center; min-height:34px; padding:0 11px; border:1px solid var(--line); border-radius:7px; background:var(--panel); color:var(--brand-dark); font-size:11px; font-weight:600; text-decoration:none; white-space:nowrap; }
+.manual-download-link:hover { background:var(--panel-soft); border-color:var(--brand); }
+}
+
+@media screen {
 .kanban-project .kanban-project-actions .kanban-sidebar-toggle { color:var(--ink); background:#fff; border-color:var(--line); }
 .kanban-project .kanban-project-actions .kanban-sidebar-toggle.has-filter { color:var(--brand-dark); border-color:var(--brand); background:#effafa; }
 .kanban-sidepanel-actions button { width:100%; min-width:0; }
@@ -483,5 +489,76 @@ main { width:min(1480px,calc(100% - 48px)); }
 .kanban-project .work-items-actions { flex-basis:100%; flex-wrap:nowrap; }
 .conversation-heading { gap:8px; margin-bottom:16px; }
 #jumpToComposer { padding:0 9px; font-size:10px; }
+}
+
+@media screen {
+:root[data-theme="dark"] { color-scheme:dark; --bg:#111b21; --panel:#1b2931; --panel-soft:#22323b; --ink:#e3edf1; --muted:#a3b3bc; --line:#394c56; --brand:#187b7b; --brand-dark:#8bd5cd; --green:#86c7a1; --amber:#e7b56e; --red:#f09a9e; --blue:#8abce0; --shadow:0 8px 28px rgba(0,0,0,.24); }
+:root[data-theme="dark"] body { background:radial-gradient(ellipse at 50% -220px,#20343d 0,transparent 720px),var(--bg); color:var(--ink); }
+.theme-toggle { color:var(--brand-dark); background:var(--panel); border-color:var(--line); flex:none; }
+.theme-toggle:hover { color:var(--ink); background:var(--panel-soft); border-color:var(--brand); }
+.theme-toggle svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-linecap:round; stroke-linejoin:round; stroke-width:1.8; }
+.theme-icon-sun { display:none; }
+:root[data-theme="dark"] .theme-icon-moon { display:none; }
+:root[data-theme="dark"] .theme-icon-sun { display:block; }
+:root[data-theme="dark"] button:focus-visible,
+:root[data-theme="dark"] a:focus-visible,
+:root[data-theme="dark"] summary:focus-visible,
+:root[data-theme="dark"] input:focus-visible,
+:root[data-theme="dark"] select:focus-visible,
+:root[data-theme="dark"] textarea:focus-visible { outline-color:#6fd3cb; }
+:root[data-theme="dark"] :is(.topbar,.register-panel,.summary-card,.project-card,.management-overview,.work-plan-body,.note-preview,.card-header,.modal-panel,.account-menu-content,.kanban-sidepanel,.work-item-row,.kanban-card,.card-comment,.evidence-preview,.initial-password-block,.user-create-panel,.attention-metric) { background-color:var(--panel); color:var(--ink); border-color:var(--line); }
+:root[data-theme="dark"] :is(.topbar,.work-plan-body) { background:var(--panel); }
+:root[data-theme="dark"] :is(.portal-nav,.dashboard-section,.dashboard-section-head,.markdown-preview,.work-plan-empty,.metrics div,.summary-kpis,.summary-counts span,.card-management-meta > span,.markdown-content code,.editor-tabs button span,.activity-search-tools) { background-color:var(--panel-soft); color:var(--ink); }
+:root[data-theme="dark"] :is(.topbar p,.hint,.section-heading span,.card-header p,.file-box small,.kanban-column-head span,.evidence-entry small,.card-comment small,.history-entry small,.kanban-owner-filter,.activity-result-count) { color:var(--muted); }
+:root[data-theme="dark"] :is(.work-item-kanban) { background:#142128; border-color:var(--line); }
+:root[data-theme="dark"] :is(.kanban-project .kanban-column,.kanban-column-toolbar) { background:#20313a; border-color:#344953; }
+:root[data-theme="dark"] :is(.kanban-column-body,.kanban-column-head) { color:var(--ink); }
+:root[data-theme="dark"] :is(.kanban-card,.work-item-row,.card-comment,.evidence-preview,.kanban-project-menu > div,.kanban-summary-menu > .work-item-summary,.mention-suggestions,.account-menu-content,.kanban-sidepanel,.work-plan-preview,.kanban-list-composer) { box-shadow:0 5px 18px rgba(0,0,0,.2); }
+:root[data-theme="dark"] :is(input:not([type=checkbox]):not([type=file]),textarea,select,.comment-composer textarea,.collaboration-section input:not([type=checkbox]),.collaboration-section textarea) { background:#132129; color:var(--ink); border-color:var(--line); }
+:root[data-theme="dark"] :is(input,textarea,select)::placeholder { color:#81949e; }
+:root[data-theme="dark"] :is(button.secondary-action,.card-actions button:not([data-action=delete]),.modal-header button,.checklist-row button,.collaboration-compose button:not(#sendComment),.card-comment button,#localUsersList button,.password-control button,.kanban-sidepanel-actions button,.kanban-project .kanban-project-actions .kanban-sidebar-toggle,.kanban-project .kanban-column-toolbar button,.kanban-project .kanban-list-composer button) { background:var(--panel-soft); color:var(--ink); border-color:var(--line); }
+:root[data-theme="dark"] :is(button.secondary-action:hover,.modal-header button:hover,.card-comment button:hover,#localUsersList button:hover,.kanban-sidepanel-actions button:hover,.kanban-project .kanban-project-actions .kanban-sidebar-toggle:hover) { background:#2b404a; border-color:#54717d; color:var(--ink); }
+:root[data-theme="dark"] :is(.kanban-project-menu > div,.kanban-summary-menu > .work-item-summary,.mention-suggestions,.kanban-column-menu,.kanban-column-menu summary,.kanban-project .kanban-sidepanel) { background:var(--panel); color:var(--ink); border-color:var(--line); }
+:root[data-theme="dark"] :is(.kanban-project-menu button,.kanban-column-menu button,.mention-suggestions button,.account-menu-content button) { background:transparent; color:var(--ink); }
+:root[data-theme="dark"] :is(.kanban-project-menu button:hover,.kanban-column-menu button:hover,.mention-suggestions button:hover,.mention-suggestions button[aria-selected=true],.account-menu-content button:hover) { background:#2b404a; color:var(--ink); }
+:root[data-theme="dark"] :is(.comment-composer,.evidence-drop-zone,.pending-bugs,.kanban-toolbar,.kanban-project .work-items-panel,.kanban-column-toolbar) { background-color:var(--panel-soft); border-color:var(--line); }
+:root[data-theme="dark"] :is(.kanban-owner-filter.is-filtered select,.kanban-sidebar-toggle.has-filter,.kanban-project .kanban-project-actions .kanban-sidebar-toggle.has-filter) { background:#1d3d40; color:#9ce0d9; border-color:#397f7c; }
+:root[data-theme="dark"] :is(.work-item-summary[data-field] > div,.work-item-summary .attention-metric,.management-attention-item) { background:var(--panel-soft); color:var(--ink); border-color:var(--line); }
+:root[data-theme="dark"] .management-attention-item:hover { background:#2a3c45; color:var(--ink); }
+:root[data-theme="dark"] :is(.summary-status,.status-line,.kpi-card,.report-status) { border-color:var(--line); }
+:root[data-theme="dark"] :is(.summary-status,.status-line,.kpi-card.primary,.kpi-card.good,.report-status.ok,.report-status.success) { background:#203b30; color:#a6d8b8; }
+:root[data-theme="dark"] :is(.summary-status.risk,.summary-status.construction,.status-line.warn,.kpi-card.bad,.report-status.late,.report-status.construction) { background:#3b3022; color:#f0c681; }
+:root[data-theme="dark"] :is(.summary-status.error,.status-line.error,.report-status.error,.priority-urgent,.overdue-label) { background:#40272b; color:#f2a4a7; }
+:root[data-theme="dark"] :is(.summary-status.study,.kpi-card.attention,.report-status.study) { background:#243748; color:#a5cbed; }
+:root[data-theme="dark"] :is(.kanban-card.type-technical-definition .kanban-kind,.priority-high) { background:#403522; color:#f0c681; }
+:root[data-theme="dark"] :is(.kanban-card.type-bug .kanban-kind,.card-management-meta .priority-urgent,.card-management-meta .overdue-label) { background:#40272b; color:#f2a4a7; }
+:root[data-theme="dark"] :is(.card-management-meta > span,.work-status,.kanban-kind) { border-color:#40535d; }
+:root[data-theme="dark"] .card-comment.own-comment { background:#1e3433; border-color:#315451; }
+:root[data-theme="dark"] .card-comment blockquote { background:#253841; border-color:#55727b; color:var(--muted); }
+:root[data-theme="dark"] #workItemForm .work-item-modal-actions { background:#1b2931; border-color:var(--line); }
+:root[data-theme="dark"] :is(#deleteWorkItemButton,.card-actions button[data-action="delete"]) { color:#f2a4a7; background:#3c2428; border-color:#68434a; }
+:root[data-theme="dark"] :is(.manual-content section,.manual-content li) { color:var(--ink); }
+:root[data-theme="dark"] .manual-content section { background:var(--panel-soft); border-color:var(--line); }
+:root[data-theme="dark"] .manual-download-link { background:var(--panel-soft); color:var(--brand-dark); border-color:var(--line); }
+:root[data-theme="dark"] :is(.user-create-panel,.initial-password-block,.initial-password,.evidence-preview img) { background-color:var(--panel-soft); color:var(--ink); border-color:var(--line); }
+:root[data-theme="dark"] :is(.kanban-sidebar-backdrop) { background:#071015a8; }
+:root[data-theme="dark"] ::selection { background:#286d6b; color:#fff; }
+:root[data-theme="dark"] { scrollbar-color:#526873 #18262d; }
+.bug-report-fields { padding:16px; border:1px solid var(--line); border-radius:9px; background:var(--panel-soft); }
+.bug-report-fields h3 { margin:0 0 4px; }
+.bug-report-fields > .hint { margin:0 0 14px; }
+.bug-report-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px 18px; }
+.bug-report-grid label { display:grid; gap:7px; font-size:12px; font-weight:600; }
+.bug-report-grid .wide-field { grid-column:1 / -1; }
+.bug-report-grid textarea { width:100%; resize:vertical; }
+.bug-severity { display:inline-flex; align-items:center; width:max-content; margin-top:5px; padding:2px 7px; border-radius:999px; background:#edf1f3; color:#536874; font-size:10px; font-weight:650; }
+.bug-severity.severity-high { background:#fff2d8; color:#87540f; }
+.bug-severity.severity-critical { background:#fde8e8; color:#a52e37; }
+:root[data-theme="dark"] .bug-report-fields { background:var(--panel-soft); border-color:var(--line); }
+:root[data-theme="dark"] .bug-severity { background:#30414a; color:#c3d2d8; }
+:root[data-theme="dark"] .bug-severity.severity-high { background:#403522; color:#f0c681; }
+:root[data-theme="dark"] .bug-severity.severity-critical { background:#40272b; color:#f2a4a7; }
+@media(max-width:700px) { .bug-report-grid { grid-template-columns:1fr; } .bug-report-grid .wide-field { grid-column:auto; } }
+@media(max-width:700px) { .kanban-workspace .top-actions #themeToggleButton { display:inline-flex; } }
 }
 }

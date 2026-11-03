@@ -1569,6 +1569,7 @@ function renderWorkItemKanban(container, visible, allItems, project, state) {
           ${workItemMenuHtml(item)}
           <button type="button" class="kanban-card-open" data-action="edit-work-item">
             <span class="kanban-kind">${escapeHtml(workItemTypes[item.type] || item.type)}</span>
+            ${item.type === 'bug' ? `<span class="bug-severity severity-${escapeHtml(item.severity || 'medium')}">${({low:'Baixa',medium:'Moderada',high:'Alta',critical:'Crítica'})[item.severity || 'medium']}</span>` : ''}
             <strong>${escapeHtml(item.title)}</strong>
           </button>
           ${workItemManagementHtml(item)}
@@ -1840,6 +1841,7 @@ async function deleteWorkItem(projectId, item, allItems) {
 
 function updateWorkItemFormOptions(project, selectedParentId = "") {
   const type = workItemType.value;
+  document.querySelector('#bugReportFields').hidden = type !== 'bug';
   const editingItem = (project.workItems || []).find(item => item.id === editingWorkItemId);
   const previousStatus = editingItem?.status || (pendingWorkItemStage ? workItemStatusForStage(type, pendingWorkItemStage) : workItemStatus.value);
   const sample = {type,status:previousStatus || Object.keys(workItemStatuses[type] || {})[0]};
@@ -1868,6 +1870,13 @@ function openWorkItemEditor(project, item = null, stage = null, preferredType = 
   else if (stage) workItemStatus.value = workItemStatusForStage(workItemType.value, stage);
   workItemTitle.value = item?.title || "";
   workItemDescription.value = item?.description || "";
+  document.querySelector('#workItemSeverity').value = item?.severity || 'medium';
+  document.querySelector('#workItemEnvironment').value = item?.environment || '';
+  document.querySelector('#workItemReproductionSteps').value = item?.reproductionSteps || '';
+  document.querySelector('#workItemExpectedResult').value = item?.expectedResult || '';
+  document.querySelector('#workItemActualResult').value = item?.actualResult || '';
+  document.querySelector('#workItemSourcePath').value = item?.sourcePath || '';
+  document.querySelector('#workItemDeploymentPath').value = item?.deploymentPath || '';
   document.querySelector('#workItemBlocked').checked = Boolean(item?.blocked);
   for (const field of ["assignee", "priority", "dueDate", "nextAction", "blockedReason", "acceptanceCriteria"]) {
     if (field === "assignee") { populateCardAssignees(item); continue; }
@@ -2397,6 +2406,13 @@ workItemForm.addEventListener("submit", async (event) => {
     status: workItemStatus.value,
     title: workItemTitle.value.trim(),
     description: workItemDescription.value.trim(),
+    severity: document.querySelector('#workItemSeverity').value,
+    environment: document.querySelector('#workItemEnvironment').value.trim(),
+    reproductionSteps: document.querySelector('#workItemReproductionSteps').value.trim(),
+    expectedResult: document.querySelector('#workItemExpectedResult').value.trim(),
+    actualResult: document.querySelector('#workItemActualResult').value.trim(),
+    sourcePath: document.querySelector('#workItemSourcePath').value.trim(),
+    deploymentPath: document.querySelector('#workItemDeploymentPath').value.trim(),
     parentId: workItemParentField.hidden ? null : workItemParent.value,
     blocked: document.querySelector('#workItemBlocked').checked,
     ...Object.fromEntries(["assignee", "priority", "dueDate", "nextAction", "blockedReason", "acceptanceCriteria"].map((field) => [field, document.getElementById(`workItem${field[0].toUpperCase()}${field.slice(1)}`).value.trim()])),
