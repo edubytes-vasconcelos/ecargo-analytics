@@ -379,3 +379,9 @@ main { width:min(1480px,calc(100% - 48px)); }
 }
 
 @media screen { .kanban-project .kanban-card small { overflow-wrap:anywhere; min-width:0; max-width:100%; } .kanban-project .kanban-card .card-management-meta { min-width:0; max-width:100%; } }
+
+@media screen {
+.kanban-pan-ready .work-item-kanban, .kanban-pan-ready .work-item-kanban * { cursor:grab !important; }
+.kanban-is-panning .work-item-kanban, .kanban-is-panning .work-item-kanban * { cursor:grabbing !important; user-select:none !important; }
+.kanban-is-panning { user-select:none; }
+}

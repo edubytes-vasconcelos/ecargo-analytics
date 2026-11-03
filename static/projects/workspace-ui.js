@@ -1,4 +1,80 @@
 /* Accessible interactions shared by the project workspace. */
+/* Space + primary mouse drag pans the board without dragging a card. */
+(() => {
+  let spaceHeld = false;
+  let pan = null;
+  let lastPanEnd = -Infinity;
+  const isEditing = target => target instanceof Element && Boolean(target.closest('input,textarea,select,[contenteditable]:not([contenteditable="false"]),[role="textbox"]'));
+  const canPan = () => document.body.classList.contains('kanban-workspace') && !document.querySelector('.modal:not([hidden])');
+  function finishPan() {
+    if (!pan) return;
+    const previous = pan;
+    pan = null;
+    lastPanEnd = performance.now();
+    document.body.classList.remove('kanban-is-panning');
+    if (previous.board.hasPointerCapture(previous.pointerId)) previous.board.releasePointerCapture(previous.pointerId);
+  }
+  function resetPan() {
+    finishPan();
+    spaceHeld = false;
+    document.body.classList.remove('kanban-pan-ready');
+  }
+  document.addEventListener('keydown', event => {
+    if (event.code !== 'Space' || event.ctrlKey || event.altKey || event.metaKey || isEditing(event.target) || !canPan()) return;
+    // Keep native Space activation for controls outside the board.
+    if (event.target instanceof Element && event.target.closest('button,summary,a') && !event.target.closest('.work-item-kanban')) return;
+    event.preventDefault();
+    spaceHeld = true;
+    document.body.classList.add('kanban-pan-ready');
+  }, true);
+  document.addEventListener('keyup', event => {
+    if (event.code === 'Space') resetPan();
+  }, true);
+  document.addEventListener('pointerdown', event => {
+    if (!spaceHeld || event.button !== 0 || event.pointerType !== 'mouse' || !canPan() || isEditing(event.target)) return;
+    const board = event.target.closest('.work-item-kanban');
+    if (!board) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const column = event.target.closest('.kanban-column')?.querySelector('.kanban-column-body');
+    pan = { board, column, pointerId:event.pointerId, x:event.clientX, y:event.clientY, left:board.scrollLeft, top:column?.scrollTop || 0, pageTop:window.scrollY };
+    board.setPointerCapture(event.pointerId);
+    document.body.classList.add('kanban-is-panning');
+  }, true);
+  document.addEventListener('pointermove', event => {
+    if (!pan || event.pointerId !== pan.pointerId) return;
+    if (!canPan() || !(event.buttons & 1)) { resetPan(); return; }
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    pan.board.scrollLeft = pan.left - (event.clientX - pan.x);
+    if (pan.column) pan.column.scrollTop = pan.top - (event.clientY - pan.y);
+    else window.scrollTo(window.scrollX, pan.pageTop - (event.clientY - pan.y));
+  }, {capture:true, passive:false});
+  document.addEventListener('pointerup', event => {
+    if (pan && event.pointerId === pan.pointerId) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      finishPan();
+    }
+  }, true);
+  document.addEventListener('pointercancel', resetPan, true);
+  document.addEventListener('lostpointercapture', event => { if (pan?.pointerId === event.pointerId) finishPan(); }, true);
+  document.addEventListener('dragstart', event => {
+    if ((spaceHeld || pan) && event.target.closest('.work-item-kanban')) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }
+  }, true);
+  document.addEventListener('click', event => {
+    if (event.target.closest('.work-item-kanban') && (spaceHeld || performance.now() - lastPanEnd < 350) && !isEditing(event.target)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }
+  }, true);
+  window.addEventListener('blur', resetPan);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) resetPan(); });
+})();
+
 let editorDirty = false;
 let modalReturnFocus = null;
 let previousModal = null;
