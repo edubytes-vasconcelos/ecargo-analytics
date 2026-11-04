@@ -49,6 +49,10 @@ def _columns(project: dict) -> dict[str, str]:
 
 def _status(item: dict, columns: dict[str, str]) -> str:
     value = str(item.get("status") or "")
+    if item.get('type') == 'requirement':
+        states = {'backlog':'Não iniciada', 'analysis':'Em análise', 'waiting-info':'Aguardando informações', 'approved':'Concluída', 'blocked':'Bloqueada'}
+        if value in states:
+            return states[value]
     if item.get('type') == 'bug':
         states = {'open':'Aberto', 'fixing':'Em correção', 'ready-for-retest':'Pronto para teste', 'closed':'Corrigido'}
         if value in states:

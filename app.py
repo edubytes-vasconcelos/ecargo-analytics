@@ -844,8 +844,8 @@ def write_projects(projects: list[dict]) -> None:
 
 WORK_ITEM_TYPES = {"requirement", "technical-definition", "bug"}
 WORK_ITEM_STATUSES = {
-    "requirement": {"backlog", "analysis", "approved", "blocked"},
-    "technical-definition": {"backlog", "definition", "ready-for-test", "testing", "done", "blocked"},
+    "requirement": {"backlog", "analysis", "waiting-info", "approved", "blocked"},
+    "technical-definition": {"backlog", "definition", "ready-for-test", "testing", "scheduled-deployment", "done", "blocked"},
     "bug": {"open", "fixing", "ready-for-retest", "blocked", "closed"},
 }
 
@@ -880,7 +880,7 @@ def _is_homologation(project: dict, status: str) -> bool:
 
 
 def _requires_validated_bugs(project: dict, status: str) -> bool:
-    return status == 'done' or _is_homologation(project, status)
+    return status in {'scheduled-deployment', 'done'} or _is_homologation(project, status)
 
 
 def _can_confirm_bug(handler, current: dict, updated: dict) -> bool:
@@ -903,16 +903,20 @@ def _work_item_from_payload(project: dict, payload: dict, item_id: str | None = 
         raise ValueError("Tipo de atividade inválido.")
     if not title:
         raise ValueError("Informe o título da atividade.")
+    items = project.get("workItems") or []
+    current = next((item for item in items if str(item.get("id")) == str(item_id)), {})
     custom_statuses = {str(column.get("id")) for column in (project.get("workItemColumns") or [])}
     if status not in WORK_ITEM_STATUSES[item_type] and status not in custom_statuses:
         raise ValueError("Status inválido para o tipo de atividade.")
-
-    items = project.get("workItems") or []
+    if item_type == "requirement" and status in custom_statuses and status != current.get("status"):
+        raise ValueError("Análises de requisitos devem seguir as etapas próprias: não iniciada, em análise, aguardando informações ou concluída.")
     parent = next((item for item in items if str(item.get("id")) == parent_id), None)
     expected_parent = {"technical-definition": "requirement", "bug": "technical-definition"}.get(item_type)
     if expected_parent and (not parent or parent.get("type") != expected_parent):
         label = "Análise de Requisitos" if item_type == "technical-definition" else "Definição Técnica"
         raise ValueError(f"Selecione uma {label} válida para vincular a atividade.")
+    if item_type == "technical-definition" and parent and parent.get("status") != "approved":
+        raise ValueError("Conclua a Análise de Requisitos antes de criar ou vincular uma Definição Técnica.")
     if not expected_parent:
         parent_id = None
 
@@ -929,9 +933,13 @@ def _work_item_from_payload(project: dict, payload: dict, item_id: str | None = 
             datetime.strptime(due_date, "%Y-%m-%d")
         except ValueError:
             raise ValueError("Prazo inválido.")
-    current = next((item for item in items if item.get("id") == item_id), {})
     if current.get('type') == 'bug' and item_type != 'bug':
         raise ValueError('O tipo Bug é preservado para manter o vínculo e o histórico da correção.')
+    if current.get('type') == 'requirement' and status != 'approved' and any(
+        item.get('type') == 'technical-definition' and not item.get('archived') and str(item.get('parentId')) == str(item_id)
+        for item in items
+    ):
+        raise ValueError('Esta Análise de Requisitos tem Definições Técnicas vinculadas. Arquive as definições antes de reabri-la.')
     if parent and parent.get('archived') and not archived:
         raise ValueError('Restaure a atividade vinculada antes de criar ou restaurar um item nela.')
     if current and current.get('type') != item_type and any(item.get('parentId') == item_id for item in items):
@@ -984,6 +992,15 @@ def _work_item_from_payload(project: dict, payload: dict, item_id: str | None = 
         parsed_deployment_url = urlparse(deployment_path)
         if parsed_deployment_url.scheme != "https" or not parsed_deployment_url.netloc or parsed_deployment_url.username or parsed_deployment_url.password:
             raise ValueError("O link do pacote de implantação deve ser uma URL HTTPS válida.")
+    if item_type == "technical-definition" and status in {"scheduled-deployment", "done"} and not archived:
+        if not checklist or any(not entry.get("done") for entry in checklist):
+            raise ValueError("Conclua todos os itens do checklist antes de agendar a implantação ou registrar a implantação em produção. Inclua ao menos um item.")
+        if not normalized_links:
+            raise ValueError("Informe ao menos um link de código antes de agendar a implantação ou registrar a implantação em produção.")
+        if not deployment_path:
+            raise ValueError("Informe o link do pacote de implantação antes de agendar a implantação ou registrar a implantação em produção.")
+        if status == "done" and current.get("status") not in {"scheduled-deployment", "done"}:
+            raise ValueError("Mova o artefato para Agendado para implantação antes de registrar como Implantado em produção.")
     return {
         "id": item_id or uuid.uuid4().hex,
         "type": item_type,

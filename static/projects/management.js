@@ -126,7 +126,7 @@ function workItemManagementHtml(item) {
     ${item.evidence?.length ? `<span>${item.evidence.length} evidências</span>` : ""}
     ${item.nextAction ? `<small>Próxima ação: ${escapeHtml(item.nextAction)}</small>` : ""}
     ${item.pendingBugs?.length ? `<span class="blocking-badge">Homologação bloqueada · ${item.pendingBugs.length} bug${item.pendingBugs.length > 1 ? 's' : ''} pendente${item.pendingBugs.length > 1 ? 's' : ''}</span>` : ''}
-    ${item.pendingBugs?.length ? '<button type="button" class="secondary-action" data-action="edit-work-item">Revisar bugs vinculados</button>' : ''}
+    ${item.pendingBugs?.length ? '<button type="button" class="secondary-action" data-action="review-pending-bugs">Revisar bugs vinculados</button>' : ''}
     ${item.blocked ? `<span class="blocking-badge">Bloqueada por outro motivo</span>${item.blockedReason ? `<small>Bloqueio: ${escapeHtml(item.blockedReason)}</small>` : ''}` : ''}
     ${bugWorkflowActionsHtml(item)}
   </div>`;

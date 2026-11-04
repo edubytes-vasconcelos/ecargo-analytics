@@ -293,7 +293,16 @@ const fs = require('node:fs');
     await page.waitForFunction(() => document.querySelector('[data-field=activityResultCount]').textContent === '1 atividade');
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.evaluate(() => { const project=projectsCache[0]; projectUiState.get(project.id).workItemView='kanban'; renderProjectDetail(project); });
-    assert.equal(await page.locator('.kanban-column').count(), 5);
+    for (const title of ['Tarefas pendentes', 'Para Desenv', 'Em Desenv', 'Para testes Signa', 'Em Homol']) {
+      assert((await page.locator('.kanban-column-head h4').allTextContents()).includes(title));
+    }
+    assert.deepEqual((await page.locator('.kanban-column-head h4').allTextContents()).slice(-2),
+      ['Agendado para implantação', 'Implantado em produção']);
+    await page.locator('.kanban-column.stage-done').scrollIntoViewIfNeeded();
+    await page.screenshot({path:'outputs/technical-deployment-light.png'});
+    await page.evaluate(() => document.documentElement.dataset.theme = 'dark');
+    await page.screenshot({path:'outputs/technical-deployment-dark.png'});
+    await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; document.querySelector('.work-item-kanban').scrollLeft = 0; });
     assert.equal(await page.locator('.kanban-card .status-pill-menu').count(), 0);
     await page.locator('.kanban-card .work-item-menu > summary').first().click();
     await page.locator('[data-action="move-work-item"]').first().click();
@@ -301,14 +310,17 @@ const fs = require('node:fs');
     assert.equal(await page.locator('#workItemStatus').evaluate(element => document.activeElement === element), true);
     const labels=await page.locator('#workItemStatus option').allTextContents();
     assert(!labels.includes('A fazer') && !labels.includes('Em andamento'));
-    assert.equal(labels.filter(label=>label==='Para Desenv').length, 1);
-    await page.locator('#workItemStatus').selectOption({ label:'Em Homol' });
+    assert.deepEqual(labels,['Não iniciada','Em análise','Aguardando informações','Concluída','Bloqueada']);
+    assert.deepEqual(await page.locator('#workItemStatus option').allTextContents(), ['Não iniciada','Em análise','Aguardando informações','Concluída','Bloqueada']);
+    await page.locator('#workItemStatus').selectOption({ label:'Concluída' });
     await page.locator('#workItemForm button[type=submit]').click();
     await page.locator('#workItemModal').waitFor({ state:'hidden' });
     await page.waitForFunction(() => {
-      const project=projectsCache[0]; const stage=project.workItemColumns.find(column=>column.title==='Em Homol').id;
-      return project.workItems[0].status===stage;
+      return projectsCache[0].workItems[0].status==='approved';
     });
+    await page.locator('.work-item-filters [data-filter="requirement"]').click();
+    assert.deepEqual(await page.locator('.kanban-column-head h4').allTextContents(),['Não iniciada','Em análise','Aguardando informações','Concluída','Bloqueada']);
+    await page.locator('.work-item-filters [data-filter="all"]').click();
     assert.equal(await page.locator('.kanban-card .status-pill-menu').count(), 0);
     const legacyId=await page.evaluate(async () => {
       const project=projectsCache[0];
@@ -330,7 +342,7 @@ const fs = require('node:fs');
     await page.evaluate(async () => {
       const p=projectsCache[0]; const stage=p.workItemColumns.find(c=>c.title==='Em Homol').id;
       for(const assignee of ['Ana Planner','Bruno Planner','']) {
-        const r=await fetch(`${appBasePath}/api/projects/${p.id}/work-items`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'requirement',title:`Filtro ${assignee || 'sem responsável'}`,status:stage,assignee})});
+        const r=await fetch(`${appBasePath}/api/projects/${p.id}/work-items`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'technical-definition',title:`Filtro ${assignee || 'sem responsável'}`,status:stage,parentId:p.workItems[0].id,assignee})});
         if(!r.ok) throw new Error('Falha ao preparar responsáveis');
       }
       await loadProjects(); const project=projectsCache[0]; projectUiState.get(project.id).workItemView='kanban'; renderProjectDetail(project);
@@ -352,7 +364,7 @@ const fs = require('node:fs');
     await owner.selectOption('unassigned');
     assert.equal(await homol.locator('.kanban-card').count(),1);
     await owner.selectOption('');
-    assert.equal(await homol.locator('.kanban-card').count(),4);
+    assert.equal(await homol.locator('.kanban-card').count(),3);
     await page.evaluate(async () => {
       const project=projectsCache[0]; const definition=project.workItems.find(i=>i.type==='technical-definition');
       const r=await fetch(`${appBasePath}/api/projects/${project.id}/work-items`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'bug',title:'Bug para validar bloqueio independente',parentId:definition.id,status:'open'})});

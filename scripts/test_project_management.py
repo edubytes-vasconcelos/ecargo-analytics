@@ -209,6 +209,13 @@ class ProjectManagementTests(unittest.TestCase):
         homol = self.admin.request('/api/projects/test/work-item-columns', {'title':'Em Homol'})
         testing = self.admin.request('/api/projects/test/work-item-columns', {'title':'Para testes Signa'})
         parent = self.create()
+        self.denied(400,lambda:self.create(type='technical-definition',parentId=parent['id'],status='definition'))
+        self.admin.request(f"/api/projects/test/work-items/{parent['id']}",{'status':'analysis'},'PATCH')
+        self.denied(400,lambda:self.create(type='technical-definition',parentId=parent['id'],status='definition'))
+        self.admin.request(f"/api/projects/test/work-items/{parent['id']}",{'status':'waiting-info'},'PATCH')
+        self.denied(400,lambda:self.create(type='technical-definition',parentId=parent['id'],status='definition'))
+        self.denied(400,lambda:self.create(status=homol['id']))
+        parent = self.admin.request(f"/api/projects/test/work-items/{parent['id']}",{'status':'approved'},'PATCH')
         artifact = self.create(type='technical-definition', parentId=parent['id'], status='definition')
         path = f"/api/projects/test/work-items/{artifact['id']}"
         parent_path = f"/api/projects/test/work-items/{parent['id']}"
@@ -224,6 +231,7 @@ class ProjectManagementTests(unittest.TestCase):
         self.denied(403,lambda:self.create(developer,type='bug',parentId=artifact['id'],status='closed'))
         self.denied(400,lambda:self.admin.request(path,{'status':homol['id']},'PATCH'))
         self.denied(400,lambda:self.admin.request(path,{'status':'done'},'PATCH'))
+        self.denied(400,lambda:self.admin.request(parent_path,{'status':'analysis'},'PATCH'))
         self.assertEqual(self.admin.request(parent_path,{'status':'approved'},'PATCH')['status'],'approved')
         result = tester.request(bug_path,{'status':'closed'},'PATCH')
         self.assertEqual(result['history'][-1]['authorId'],tester_user['id'])
@@ -234,17 +242,54 @@ class ProjectManagementTests(unittest.TestCase):
         self.assertEqual(result['status'],'closed')
         self.assertFalse(any(entry.get('after')=='ready-for-retest' for entry in result['history']))
         self.admin.request(path,{'status':homol['id']},'PATCH')
-        self.admin.request(parent_path,{'status':homol['id']},'PATCH')
         developer.request(bug_path,{'status':'fixing'},'PATCH')
-        for item_id in [artifact['id'],parent['id']]:
-            item = current(item_id)
-            self.assertEqual(item['status'],testing['id'])
-            self.assertEqual([bug['id']],[entry['id'] for entry in item['pendingBugs']])
-            self.assertIn('retorno para teste',item['history'][-1]['author'])
+        item = current(artifact['id'])
+        self.assertEqual(item['status'],testing['id'])
+        self.assertEqual([bug['id']],[entry['id'] for entry in item['pendingBugs']])
+        self.assertIn('retorno para teste',item['history'][-1]['author'])
+        requirement = current(parent['id'])
+        self.assertEqual(requirement['status'],'approved')
+        self.assertEqual([bug['id']],[entry['id'] for entry in requirement['pendingBugs']])
         tester.request(bug_path,{'status':'closed'},'PATCH')
+        self.admin.request(path,{'status':'scheduled-deployment',
+            'checklist':[{'text':'Validado em teste','done':True}],
+            'sourceCodeLinks':[{'type':'backend','url':'https://example.test/code'}],
+            'deploymentPath':'https://example.test/package'},'PATCH')
         self.admin.request(path,{'status':'done'},'PATCH')
         developer.request(bug_path,{'status':'fixing'},'PATCH')
         self.assertEqual(current(artifact['id'])['status'],testing['id'])
+
+    def test_technical_deployment_validation(self):
+        parent = self.create(status='approved')
+        artifact = self.create(type='technical-definition', parentId=parent['id'], status='testing')
+        path = f"/api/projects/test/work-items/{artifact['id']}"
+        ready = {
+            'checklist': [{'text': 'Validar entrega', 'done': True}],
+            'sourceCodeLinks': [{'type': 'backend', 'url': 'https://example.test/code'}],
+            'deploymentPath': 'https://example.test/package',
+        }
+        for invalid in [
+            {'checklist': []},
+            {'checklist': [{'text': 'Validar entrega', 'done': False}]},
+            {'sourceCodeLinks': []},
+            {'deploymentPath': ''},
+        ]:
+            self.denied(400, lambda invalid=invalid: self.admin.request(
+                path, {**ready, **invalid, 'status': 'scheduled-deployment'}, 'PATCH'))
+        self.denied(400, lambda: self.admin.request(path, {**ready, 'status': 'done'}, 'PATCH'))
+        scheduled = self.admin.request(path, {**ready, 'status': 'scheduled-deployment'}, 'PATCH')
+        self.assertEqual(scheduled['status'], 'scheduled-deployment')
+        self.denied(400, lambda: self.admin.request(path, {'status': 'done', 'deploymentPath': ''}, 'PATCH'))
+        deployed = self.admin.request(path, {'status': 'done'}, 'PATCH')
+        self.assertEqual(deployed['status'], 'done')
+        bug = self.create(type='bug', parentId=artifact['id'], status='open')
+        project = next(p for p in self.admin.request('/api/projects', method='GET') if p['id'] == 'test')
+        updated = next(i for i in project['workItems'] if i['id'] == artifact['id'])
+        self.assertNotEqual(updated['status'], 'done')
+        self.denied(400, lambda: self.admin.request(path, {'status': 'scheduled-deployment'}, 'PATCH'))
+        self.admin.request(f"/api/projects/test/work-items/{bug['id']}", {'status': 'closed'}, 'PATCH')
+        self.admin.request(path, {'status': 'scheduled-deployment'}, 'PATCH')
+        self.admin.request(path, {'status': 'done'}, 'PATCH')
 
     def test_existing_homologation_with_pending_bugs_is_reconciled_once(self):
         project = {'id':'workflow-migration','name':'Migração de fluxo','workItemColumns':[{'id':'custom-homol','title':'Em Homol'}], 'workItems':[

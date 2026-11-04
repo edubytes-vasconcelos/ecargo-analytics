@@ -565,7 +565,7 @@ main { width:min(1480px,calc(100% - 48px)); }
 :root[data-theme="dark"] input:focus-visible,
 :root[data-theme="dark"] select:focus-visible,
 :root[data-theme="dark"] textarea:focus-visible { outline-color:#6fd3cb; }
-:root[data-theme="dark"] :is(.topbar,.register-panel,.summary-card,.project-card,.management-overview,.work-plan-body,.note-preview,.card-header,.modal-panel,.account-menu-content,.kanban-sidepanel,.work-item-row,.kanban-card,.card-comment,.evidence-preview,.initial-password-block,.user-create-panel,.attention-metric) { background-color:var(--panel); color:var(--ink); border-color:var(--line); }
+:root[data-theme="dark"] :is(.topbar,.register-panel,.summary-card,.project-card,.management-overview,.work-plan-body,.note-preview,.card-header,.work-items-panel,.modal-panel,.account-menu-content,.kanban-sidepanel,.work-item-row,.kanban-card,.card-comment,.evidence-preview,.initial-password-block,.user-create-panel,.attention-metric) { background-color:var(--panel); color:var(--ink); border-color:var(--line); }
 :root[data-theme="dark"] :is(.topbar,.work-plan-body) { background:var(--panel); }
 :root[data-theme="dark"] :is(.portal-nav,.dashboard-section,.dashboard-section-head,.markdown-preview,.work-plan-empty,.metrics div,.summary-kpis,.summary-counts span,.card-management-meta > span,.markdown-content code,.editor-tabs button span,.activity-search-tools) { background-color:var(--panel-soft); color:var(--ink); }
 :root[data-theme="dark"] :is(.topbar p,.hint,.section-heading span,.card-header p,.file-box small,.kanban-column-head span,.evidence-entry small,.card-comment small,.history-entry small,.kanban-owner-filter,.activity-result-count) { color:var(--muted); }
@@ -586,7 +586,7 @@ main { width:min(1480px,calc(100% - 48px)); }
 :root[data-theme="dark"] :is(.kanban-project-menu > div,.kanban-summary-menu > .work-item-summary,.mention-suggestions,.kanban-column-menu,.kanban-column-menu summary,.kanban-project .kanban-sidepanel) { background:var(--panel); color:var(--ink); border-color:var(--line); }
 :root[data-theme="dark"] :is(.kanban-project-menu button,.kanban-column-menu button,.mention-suggestions button,.account-menu-content button) { background:transparent; color:var(--ink); }
 :root[data-theme="dark"] :is(.kanban-project-menu button:hover,.kanban-column-menu button:hover,.mention-suggestions button:hover,.mention-suggestions button[aria-selected=true],.account-menu-content button:hover) { background:#2b404a; color:var(--ink); }
-:root[data-theme="dark"] :is(.comment-composer,.evidence-drop-zone,.pending-bugs,.kanban-toolbar,.kanban-project .work-items-panel,.kanban-column-toolbar) { background-color:var(--panel-soft); border-color:var(--line); }
+:root[data-theme="dark"] :is(.comment-composer,.evidence-drop-zone,.pending-bugs,.kanban-toolbar,.kanban-column-toolbar) { background-color:var(--panel-soft); border-color:var(--line); }
 :root[data-theme="dark"] :is(.kanban-owner-filter.is-filtered select,.kanban-sidebar-toggle.has-filter,.kanban-project .kanban-project-actions .kanban-sidebar-toggle.has-filter) { background:#1d3d40; color:#9ce0d9; border-color:#397f7c; }
 :root[data-theme="dark"] :is(.work-item-summary[data-field] > div,.work-item-summary .attention-metric,.management-attention-item) { background:var(--panel-soft); color:var(--ink); border-color:var(--line); }
 :root[data-theme="dark"] .management-attention-item:hover { background:#2a3c45; color:var(--ink); }
@@ -653,6 +653,27 @@ main { width:min(1480px,calc(100% - 48px)); }
 :root[data-theme="dark"] :is(.kanban-sidebar-backdrop) { background:#071015a8; }
 :root[data-theme="dark"] ::selection { background:#286d6b; color:#fff; }
 :root[data-theme="dark"] { scrollbar-color:#526873 #18262d; }
+:root[data-theme="dark"] .task-panel { background:var(--panel); color:var(--ink); border-color:var(--line); }
+:root[data-theme="dark"] .task-title { color:var(--ink); }
+:root[data-theme="dark"] .task-title h3 { color:var(--ink); }
+:root[data-theme="dark"] .file-box span { color:var(--ink); }
+:root[data-theme="dark"] .task-list { border-color:var(--line); background:var(--panel); }
+:root[data-theme="dark"] .task-table th { background:#263942; color:var(--muted); border-color:var(--line); }
+:root[data-theme="dark"] .task-table td { color:var(--ink); border-color:#344852; }
+:root[data-theme="dark"] .task-row { background:var(--panel); color:var(--ink); }
+:root[data-theme="dark"] .task-row.summary { background:#263942; }
+:root[data-theme="dark"] .task-row.context { color:var(--muted); }
+:root[data-theme="dark"] .task-row.attention { background:#382f24; }
+:root[data-theme="dark"] .task-row.late { background:#3a272a; }
+:root[data-theme="dark"] .task-row .task-name::before { background:#526873; }
+:root[data-theme="dark"] .tree-toggle { background:var(--panel-soft); color:var(--ink); border-color:#526873; }
+:root[data-theme="dark"] .tree-toggle:disabled { background:transparent; }
+:root[data-theme="dark"] .work-items-heading p { color:var(--muted); }
+:root[data-theme="dark"] .status-pill { background:#344851; color:#d8e4e8; }
+:root[data-theme="dark"] .status-pill.danger { background:#40272b; color:#f2a4a7; }
+:root[data-theme="dark"] .status-pill.progress,
+:root[data-theme="dark"] .status-pill.attention { background:#243748; color:#a5cbed; }
+:root[data-theme="dark"] .status-pill.done { background:#203b30; color:#a6d8b8; }
 .bug-report-fields { padding:16px; border:1px solid var(--line); border-radius:9px; background:var(--panel-soft); }
 .bug-report-fields h3 { margin:0 0 4px; }
 .bug-report-fields > .hint { margin:0 0 14px; }

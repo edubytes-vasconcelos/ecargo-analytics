@@ -162,8 +162,8 @@ const workItemTypes = {
   bug: "Bug",
 };
 const workItemStatuses = {
-  requirement: { backlog: "Não iniciada", analysis: "Em análise", approved: "Aprovada", blocked: "Bloqueada" },
-  "technical-definition": { backlog: "Não iniciada", definition: "Em definição", "ready-for-test": "Pronta para teste", testing: "Em teste", done: "Concluída", blocked: "Bloqueada" },
+  requirement: { backlog: "Não iniciada", analysis: "Em análise", "waiting-info": "Aguardando informações", approved: "Concluída", blocked: "Bloqueada" },
+  "technical-definition": { backlog: "Não iniciada", definition: "Em definição", "ready-for-test": "Pronta para teste", testing: "Em teste", "scheduled-deployment": "Agendado para implantação", done: "Implantado em produção", blocked: "Bloqueada" },
   bug: { open: "Aberto", fixing: "Em correção", "ready-for-retest": "Pronto para teste", blocked: "Bloqueado", closed: "Corrigido" },
 };
 
@@ -2051,11 +2051,12 @@ function workItemStage(item) {
   if (["approved", "done", "closed"].includes(item.status)) return "done";
   if (item.status === "blocked") return "blocked";
   if (["backlog", "open"].includes(item.status)) return "backlog";
-  if (["analysis", "definition", "ready-for-test", "testing", "fixing", "ready-for-retest"].includes(item.status)) return "progress";
+  if (["analysis", "waiting-info", "definition", "ready-for-test", "testing", "fixing", "ready-for-retest"].includes(item.status)) return "progress";
   return item.status;
 }
 
 function workItemStatusLabel(project, item) {
+  if (item.type === 'requirement' && workItemStatuses.requirement[item.status]) return workItemStatuses.requirement[item.status];
   if (item.type === 'bug' && workItemStatuses.bug[item.status]) return workItemStatuses.bug[item.status];
   const stage = workItemStage(item);
   return (project.workItemColumns || []).find(column => column.id === stage)?.title
@@ -2070,7 +2071,7 @@ function workItemWorkflowColumns(project, item = null, includeCurrent = true) {
   const activeStages = new Set((project.workItems || []).filter(candidate => !candidate.archived).map(workItemStage));
   const currentStage = includeCurrent && item?.status ? workItemStage(item) : null;
   const columns = kanbanColumnOrder(project).map(id => byId.get(id)).filter(Boolean).filter(column =>
-    column.id.startsWith("custom-") || !custom.length || activeStages.has(column.id) || ["blocked","done"].includes(column.id) || column.id === currentStage);
+    column.id.startsWith("custom-") || !custom.length || activeStages.has(column.id) || ["blocked","scheduled-deployment","done"].includes(column.id) || column.id === currentStage);
   if (currentStage && !columns.some(column => column.id === currentStage)) {
     const current = (project.workItemColumns || []).find(column => column.id === currentStage);
     if (current) columns.push({...current,title:current.archived ? `${current.title} (lista arquivada)` : current.title});
@@ -2079,6 +2080,13 @@ function workItemWorkflowColumns(project, item = null, includeCurrent = true) {
 }
 
 function workItemStatusOptions(project, item, includeCurrent = true) {
+  if (item.type === 'requirement') {
+    const options = {...workItemStatuses.requirement};
+    const hasDefinitions = (project.workItems || []).some(candidate => candidate.type === 'technical-definition' && !candidate.archived && candidate.parentId === item.id);
+    if (hasDefinitions) return {[item.status]: workItemStatusLabel(project, item)};
+    if (includeCurrent && item.status && !options[item.status]) options[item.status] = `${workItemStatusLabel(project, item)} (situação atual)`;
+    return options;
+  }
   if (item.type === 'bug') {
     const options = { open: 'Aberto', fixing: 'Em correção', 'ready-for-retest': 'Pronto para teste' };
     if (canConfirmBug() || item.status === 'closed') options.closed = 'Corrigido — validado em teste';
@@ -2096,7 +2104,7 @@ function workItemStatusOptions(project, item, includeCurrent = true) {
 function workItemTransitionBlock(project, item, status) {
   if (item.type === 'bug' || !item.pendingBugs?.length) return '';
   const title = (project.workItemColumns || []).find(column => column.id === status)?.title || status;
-  if (status === 'done' || /homol/i.test(title)) return `${item.pendingBugs.length} bug(s) aguardam confirmação do testador`;
+  if (['scheduled-deployment', 'done'].includes(status) || /homol/i.test(title)) return `${item.pendingBugs.length} bug(s) aguardam confirmação do testador`;
   return '';
 }
 
@@ -2176,10 +2184,11 @@ async function submitKanbanColumn(project, title) {
 
 function workItemStatusForStage(type, stage) {
   if (type === 'bug' && ['open', 'fixing', 'ready-for-retest', 'closed'].includes(stage)) return stage;
-  if (String(stage).startsWith("custom-")) return stage;
+  if (type === 'requirement' && Object.hasOwn(workItemStatuses.requirement, stage)) return stage;
+  if (String(stage).startsWith("custom-")) return type === 'requirement' ? null : stage;
   const mappings = {
     requirement: { backlog: "backlog", progress: "analysis", blocked: "blocked", done: "approved" },
-    "technical-definition": { backlog: "backlog", progress: "definition", blocked: "blocked", done: "done" },
+    "technical-definition": { backlog: "backlog", progress: "definition", blocked: "blocked", "scheduled-deployment": "scheduled-deployment", done: "done" },
     bug: { backlog: "open", progress: "fixing", blocked: "blocked", done: "closed" },
   };
   return mappings[type]?.[stage] || null;
@@ -2188,14 +2197,16 @@ function workItemStatusForStage(type, stage) {
 const kanbanBuiltInColumns = [
   { id: "backlog", title: "A fazer" },
   { id: "progress", title: "Em andamento" },
-  { id: "done", title: "Concluído" },
+  { id: "scheduled-deployment", title: "Agendado para implantação" },
+  { id: "done", title: "Implantado em produção" },
 ];
 
 function kanbanColumnOrder(project) {
   const customIds = (project.workItemColumns || []).filter((column) => !column.archived).map((column) => column.id);
   const availableIds = [...kanbanBuiltInColumns.map((column) => column.id), ...customIds];
   const stored = (project.workItemColumnOrder || []).filter((id) => availableIds.includes(id));
-  return [...stored, ...availableIds.filter((id) => !stored.includes(id))];
+  const order = [...stored, ...availableIds.filter((id) => !stored.includes(id))];
+  return [...order.filter(id => !["scheduled-deployment", "done"].includes(id)), "scheduled-deployment", "done"];
 }
 
 function syncKanbanViewport() {
@@ -2212,6 +2223,7 @@ function kanbanAssigneeKey(item) {
 
 function renderWorkItemKanban(container, visible, allItems, project, state) {
   const bugOnly = state.workItemFilter === 'bug';
+  const requirementOnly = state.workItemFilter === 'requirement';
   state.kanbanOwners ||= {};
   const owners = new Map(allItems.filter(item => !item.archived).map(item => [kanbanAssigneeKey(item), item.assignee || 'Sem responsável']));
   owners.set('unassigned', 'Sem responsável');
@@ -2219,17 +2231,17 @@ function renderWorkItemKanban(container, visible, allItems, project, state) {
   const customColumns = project.workItemColumns || [];
   const customById = new Map(customColumns.filter((column) => !column.archived).map((column) => [column.id, column]));
   const builtInById = new Map(kanbanBuiltInColumns.map((column) => [column.id, column]));
-  const columns = bugOnly ? ['open', 'fixing', 'ready-for-retest', 'closed'].map(id => ({id, title:workItemStatuses.bug[id], custom:false})) : kanbanColumnOrder(project).map((id) => customById.has(id)
+  const columns = bugOnly ? ['open', 'fixing', 'ready-for-retest', 'closed'].map(id => ({id, title:workItemStatuses.bug[id], custom:false})) : requirementOnly ? Object.entries(workItemStatuses.requirement).map(([id,title]) => ({id,title,custom:false})) : kanbanColumnOrder(project).map((id) => customById.has(id)
     ? { ...customById.get(id), custom: true }
-    : { ...builtInById.get(id), custom: false }).filter(column => column.custom || !customById.size || visible.some(item => workItemStage(item) === column.id));
-  const archivedColumns = bugOnly ? [] : customColumns.filter((column) => column.archived);
+    : { ...builtInById.get(id), custom: false }).filter(column => column.custom || ["scheduled-deployment", "done"].includes(column.id) || !customById.size || visible.some(item => workItemStage(item) === column.id));
+  const archivedColumns = bugOnly || requirementOnly ? [] : customColumns.filter((column) => column.archived);
   container.className = "work-item-kanban";
   container.innerHTML = columns.map((column) => {
-    const columnItems = visible.filter(item => (bugOnly ? (['open','fixing','ready-for-retest','closed'].includes(item.status) ? item.status : 'open') : workItemStage(item)) === column.id);
+    const columnItems = visible.filter(item => (bugOnly ? (['open','fixing','ready-for-retest','closed'].includes(item.status) ? item.status : 'open') : requirementOnly ? item.status : workItemStage(item)) === column.id);
     const owner = state.kanbanOwners[column.id] || '';
     const cards = columnItems.filter(item => !owner || kanbanAssigneeKey(item) === owner);
     return `<section class="kanban-column stage-${column.id}" data-kanban-stage="${escapeHtml(column.id)}">
-      <div class="kanban-column-toolbar"><div class="kanban-column-head" draggable="${!bugOnly}"><h4>${escapeHtml(column.title)}</h4><span title="Atividades visíveis nesta lista">${owner ? `${cards.length}/${columnItems.length}` : cards.length}</span>${column.custom ? kanbanColumnMenuHtml(column) : ""}</div>
+      <div class="kanban-column-toolbar"><div class="kanban-column-head" draggable="${!bugOnly && !requirementOnly}"><h4>${escapeHtml(column.title)}</h4><span title="Atividades visíveis nesta lista">${owner ? `${cards.length}/${columnItems.length}` : cards.length}</span>${column.custom ? kanbanColumnMenuHtml(column) : ""}</div>
       <label class="kanban-owner-filter ${owner ? 'is-filtered' : ''}"><span>Responsável</span><select data-column-owner="${escapeHtml(column.id)}" aria-label="Responsável na lista ${escapeHtml(column.title)}"><option value="">Todos</option>${ownerOptions.map(([key,name]) => `<option value="${escapeHtml(key)}" ${key === owner ? 'selected' : ''}>${escapeHtml(name)}</option>`).join('')}</select></label></div>
       <div class="kanban-column-body">${cards.map((item) => {
         const parent = allItems.find((candidate) => candidate.id === item.parentId);
@@ -2246,10 +2258,10 @@ function renderWorkItemKanban(container, visible, allItems, project, state) {
           ${childCount ? `<small class="kanban-card-children">${childCount} vinculada${childCount > 1 ? "s" : ""}</small>` : ""}
         </article>`;
       }).join("") || `<span class="kanban-empty">Sem atividades</span>`}
-      ${bugOnly && column.id === 'closed' && !canConfirmBug() ? '' : `<button type="button" class="kanban-add" data-action="kanban-add" data-stage="${escapeHtml(column.id)}">${bugOnly ? 'Adicionar bug' : 'Adicionar cartão'}</button>`}</div>
+      ${bugOnly && column.id === 'closed' && !canConfirmBug() ? '' : `<button type="button" class="kanban-add" data-action="kanban-add" data-stage="${escapeHtml(column.id)}">${bugOnly ? 'Adicionar bug' : requirementOnly ? 'Adicionar análise' : 'Adicionar cartão'}</button>`}</div>
     </section>`;
   }).join("")
-  + (bugOnly ? '' : state.kanbanAddListOpen
+  + (bugOnly || requirementOnly ? '' : state.kanbanAddListOpen
     ? `<form class="kanban-list-composer" data-action="kanban-add-list-form">
         <input type="text" name="title" placeholder="Nome da lista" data-field="kanbanNewListInput" autocomplete="off" maxlength="60" />
         <div class="kanban-list-composer-actions">
@@ -2287,7 +2299,7 @@ function renderWorkItemKanban(container, visible, allItems, project, state) {
     openWorkItemEditor(project, null, button.dataset.stage, preferredType);
   }));
   enableKanbanDragging(container, allItems, project);
-  if (!bugOnly) enableKanbanColumnDragging(container, project);
+  if (!bugOnly && !requirementOnly) enableKanbanColumnDragging(container, project);
 
   container.querySelectorAll("[data-action='archive-kanban-column']").forEach((button) => button.addEventListener("click", async () => {
     const columnId = button.closest("[data-kanban-stage]").dataset.kanbanStage;
@@ -2469,6 +2481,15 @@ function bindWorkItemActions(container, allItems, project) {
     const id = button.closest("[data-work-item-id]").dataset.workItemId;
     openWorkItemEditor(project, allItems.find((item) => item.id === id));
   }));
+  container.querySelectorAll("[data-action='review-pending-bugs']").forEach((button) => button.addEventListener("click", () => {
+    const id = button.closest("[data-work-item-id]").dataset.workItemId;
+    openWorkItemEditor(project, allItems.find((item) => item.id === id));
+    requestAnimationFrame(() => {
+      const pending = document.querySelector('#workItemPendingBugs');
+      pending?.scrollIntoView({block:'center'});
+      pending?.querySelector('[data-open-pending-bug]')?.focus();
+    });
+  }));
   container.querySelectorAll("[data-action='archive-work-item']").forEach((button) => button.addEventListener("click", async () => {
     const id = button.closest("[data-work-item-id]").dataset.workItemId;
     const item = allItems.find((candidate) => candidate.id === id);
@@ -2543,8 +2564,20 @@ function updateWorkItemFormOptions(project, selectedParentId = "") {
   workItemParent.required = Boolean(parentType);
   if (!parentType) return;
   workItemParentLabel.textContent = type === "bug" ? "Artefato técnico vinculado" : "Análise de Requisitos vinculada";
-  const parents = (project.workItems || []).filter((item) => item.type === parentType && (!item.archived || item.id === selectedParentId));
-  workItemParent.innerHTML = `<option value="">Selecione</option>${parents.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.title)}</option>`).join("")}`;
+  const parents = (project.workItems || []).filter((item) => item.type === parentType && (!item.archived || item.id === selectedParentId)
+    && (type !== 'technical-definition' || item.status === 'approved' || item.id === selectedParentId));
+  const requirementHint = type === 'technical-definition'
+    ? 'Só é possível criar uma definição técnica a partir de uma análise de requisitos concluída.'
+    : '';
+  workItemParent.innerHTML = `<option value="">${type === 'technical-definition' ? 'Selecione uma análise concluída' : 'Selecione'}</option>${parents.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.title)}${type === 'technical-definition' && item.status !== 'approved' ? ' · análise não concluída (vínculo existente)' : ''}</option>`).join("")}`;
+  const parentHint = document.querySelector('#workItemParentHint');
+  const noCompletedRequirement = type === 'technical-definition' && !parents.some(item => item.status === 'approved');
+  if (parentHint) {
+    parentHint.textContent = noCompletedRequirement
+      ? 'Ainda não há análises concluídas neste projeto. Conclua uma Análise de Requisitos para liberar a criação da definição técnica.'
+      : requirementHint;
+    parentHint.hidden = !requirementHint;
+  }
   workItemParent.value = selectedParentId || "";
   renderBugWorkflowGuide(project);
 }

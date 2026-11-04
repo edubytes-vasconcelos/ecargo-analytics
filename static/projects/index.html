@@ -6,7 +6,7 @@
     <title>Portal E-Cargo | Evolutivas</title>
     <script src="__BASE_PATH__/projects/theme.js?v=1"></script>
     <link rel="stylesheet" href="__BASE_PATH__/projects/styles.css?v=37" />
-    <link rel="stylesheet" href="__BASE_PATH__/projects/workspace.css?v=16" />
+    <link rel="stylesheet" href="__BASE_PATH__/projects/workspace.css?v=18" />
   </head>
   <body>
     <header class="topbar">
@@ -466,6 +466,7 @@
             <label id="workItemParentField" class="wide-field" hidden>
               <span id="workItemParentLabel">Vincular a</span>
               <select id="workItemParent"></select>
+              <small id="workItemParentHint" class="hint" hidden></small>
             </label>
             <section id="bugWorkflowPanel" class="wide-field" hidden aria-label="Fluxo do bug"><div id="bugWorkflowGuide" class="bug-workflow-guide"></div></section>
             <label>Responsável<select id="workItemAssignee"><option value="">Sem responsável</option></select></label>
@@ -494,7 +495,7 @@
             </section>
             <section id="technicalArtifactsFields" class="wide-field bug-report-fields" hidden aria-label="Referências técnicas">
               <h3>Referências técnicas no GitHub</h3>
-              <p class="hint">Adicione até três repositórios, um por camada, e o pacote de implantação associado.</p>
+              <p class="hint">Adicione até três repositórios, um por camada, e o pacote de implantação associado. Para agendar a implantação, informe ao menos um link de código, o pacote e conclua todos os itens do checklist. Depois, mova para Implantado em produção para finalizar.</p>
               <div id="sourceCodeLinksList" class="source-code-links-list"></div>
               <button id="addSourceCodeLink" class="secondary-action source-code-add" type="button">+ Adicionar código (0/3)</button>
               <label class="deployment-package-field">Pacote de implantação no GitHub<input id="workItemDeploymentPath" type="url" placeholder="https://github.com/organizacao/repositorio/releases/..." /></label>
@@ -546,8 +547,8 @@
 
     <div id="notificationModal" class="modal" hidden><div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="notificationTitle"><div class="modal-header"><h2 id="notificationTitle">Notificações</h2><button id="closeNotifications" type="button">Fechar</button></div><div id="notificationList"></div></div></div>
     <script src="__BASE_PATH__/projects/auth.js?v=7"></script>
-    <script src="__BASE_PATH__/projects/management.js?v=10"></script>
-    <script src="__BASE_PATH__/projects/app.js?v=70"></script>
+    <script src="__BASE_PATH__/projects/management.js?v=11"></script>
+    <script src="__BASE_PATH__/projects/app.js?v=71"></script>
     <script src="__BASE_PATH__/projects/mentions.js?v=2"></script>
     <script src="__BASE_PATH__/projects/workspace-ui.js?v=5"></script>
   </body>

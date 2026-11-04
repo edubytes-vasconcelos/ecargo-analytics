@@ -93,3 +93,11 @@ Use o resumo e a pauta como apoio para reuniões. Se uma atividade estiver sem r
 ## Se uma pessoa não receber a notificação
 
 Confirme se ela foi selecionada na lista de sugestões após digitar **@**, se a conta está ativa e se o comentário foi enviado. Uma menção digitada como texto comum não dispara notificação. O próprio autor da mensagem é excluído dos destinatários.
+
+### Implantação de artefatos técnicos
+
+O fluxo final das Definições Técnicas é **Agendado para implantação → Implantado em produção**. A última lista representa a conclusão do artefato. Registros anteriormente concluídos aparecem nessa lista.
+
+Para agendar ou registrar a implantação, inclua ao menos um item no checklist e marque todos como concluídos, informe ao menos um link de código e o link HTTPS do pacote de implantação. Todos os bugs ativos vinculados precisam estar encerrados por um testador ou administrador. É necessário passar pelo agendamento antes de registrar a implantação em produção.
+
+Reabrir ou criar um bug pendente em um artefato agendado ou implantado devolve o artefato para teste. Concluir o projeto continua sendo uma ação independente.
