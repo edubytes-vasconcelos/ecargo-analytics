@@ -698,7 +698,7 @@ main { width:min(1480px,calc(100% - 48px)); }
 .kanban-project .kanban-column.is-collapsed { flex:0 0 52px; width:52px; min-width:52px; }
 .kanban-project .kanban-column.is-collapsed .kanban-column-toolbar { flex:1; display:flex; margin:0; border:0; border-radius:10px; }
 .kanban-project .kanban-column [hidden] { display:none !important; }
-.kanban-project .kanban-collapsed-strip { display:flex; flex:1; width:100%; min-height:200px; align-items:center; flex-direction:column; gap:12px; padding:12px 6px; border:0; border-radius:10px; background:transparent; color:var(--ink); }
+.kanban-project .kanban-collapsed-strip { display:flex; flex:1; width:100%; min-height:200px; align-items:center; justify-content:flex-start; flex-direction:column; gap:12px; padding:12px 6px; border:0; border-radius:10px; background:transparent; color:var(--ink); }
 .kanban-project .kanban-collapsed-strip > span:first-child { font-size:22px; line-height:1; }
 .kanban-collapsed-count { font-size:11px; padding:2px 5px; border-radius:6px; background:var(--panel); color:var(--muted); }
 .kanban-collapsed-title { writing-mode:vertical-rl; text-orientation:mixed; font-size:12px; font-weight:700; text-align:start; }
