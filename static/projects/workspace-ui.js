@@ -21,8 +21,8 @@
   }
   document.addEventListener('keydown', event => {
     if (event.code !== 'Space' || event.ctrlKey || event.altKey || event.metaKey || isEditing(event.target) || !canPan()) return;
-    // Keep native Space activation for controls outside the board.
-    if (event.target instanceof Element && event.target.closest('button,summary,a') && !event.target.closest('.work-item-kanban')) return;
+    // Keep native Space activation for interactive controls.
+    if (event.target instanceof Element && event.target.closest('button,summary,a')) return;
     event.preventDefault();
     spaceHeld = true;
     document.body.classList.add('kanban-pan-ready');

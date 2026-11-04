@@ -101,3 +101,9 @@ O fluxo final das Definições Técnicas é **Agendado para implantação → Im
 Para agendar ou registrar a implantação, inclua ao menos um item no checklist e marque todos como concluídos, informe ao menos um link de código e o link HTTPS do pacote de implantação. Todos os bugs ativos vinculados precisam estar encerrados por um testador ou administrador. É necessário passar pelo agendamento antes de registrar a implantação em produção.
 
 Reabrir ou criar um bug pendente em um artefato agendado ou implantado devolve o artefato para teste. Concluir o projeto continua sendo uma ação independente.
+
+### Foco nas listas do Kanban
+
+Use o botão **Recolher lista** no cabeçalho para reduzir a lista a uma faixa vertical com seu nome e a quantidade de cartões. Clique na faixa para expandir novamente ou use **Expandir todas** na barra do quadro.
+
+A preferência fica salva neste navegador por usuário e projeto. Recolher uma lista não altera suas atividades, seus filtros nem a visualização dos outros usuários. Os botões também funcionam com Enter e Espaço.

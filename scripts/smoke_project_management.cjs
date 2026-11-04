@@ -298,12 +298,47 @@ const fs = require('node:fs');
     }
     assert.deepEqual((await page.locator('.kanban-column-head h4').allTextContents()).slice(-2),
       ['Agendado para implantação', 'Implantado em produção']);
+    const firstColumn = page.locator('.kanban-column').first();
+    const firstStage = await firstColumn.getAttribute('data-kanban-stage');
+    const fullWidth = (await firstColumn.boundingBox()).width;
+    await firstColumn.locator('[data-action="collapse-column"]').click();
+    assert((await firstColumn.boundingBox()).width < fullWidth / 2);
+    const collapsedBounds = await firstColumn.boundingBox();
+    const nextBounds = await page.locator('.kanban-column').nth(1).boundingBox();
+    assert(nextBounds.x - collapsedBounds.x - collapsedBounds.width < 20);
+    assert.equal(await firstColumn.locator('.kanban-column-body').isVisible(), false);
+    assert.equal(await firstColumn.locator('.kanban-owner-filter').isVisible(), false);
+    await firstColumn.locator('[data-action="expand-column"]').press('Space');
+    assert.equal(await firstColumn.locator('.kanban-column-body').isVisible(), true);
+    await firstColumn.locator('[data-action="collapse-column"]').click();
+    await page.evaluate(() => {
+      const project = projectsCache[0];
+      const key = collapsedKanbanKey(project);
+      const originalUser = authState.user;
+      try {
+        authState.user = {...originalUser, id:'different-viewer'};
+        if (getCollapsedKanbanColumns(project).size) throw new Error('Preferência compartilhada entre usuários');
+      } finally { authState.user = originalUser; }
+      if (getCollapsedKanbanColumns({...project,id:'other-project'}).size) throw new Error('Preferência compartilhada entre projetos');
+      collapsedKanbanPreferences.delete(key);
+      renderProjectDetail(project);
+    });
+    assert.equal(await page.locator('.kanban-column.is-collapsed').getAttribute('data-kanban-stage'), firstStage);
+    await page.locator('.kanban-column').nth(1).locator('[data-action="collapse-column"]').click();
+    await page.screenshot({path:'outputs/kanban-collapsed-light.png'});
+    await page.evaluate(() => document.documentElement.dataset.theme = 'dark');
+    await page.screenshot({path:'outputs/kanban-collapsed-dark.png'});
+    await page.evaluate(() => document.documentElement.dataset.theme = 'light');
+    await page.getByRole('button', {name:'Expandir todas',exact:true}).click();
+    assert.equal(await page.locator('.kanban-column.is-collapsed').count(), 0);
+    assert.equal(await page.getByRole('button', {name:'Expandir todas',exact:true}).isDisabled(), true);
     await page.locator('.kanban-column.stage-done').scrollIntoViewIfNeeded();
     await page.screenshot({path:'outputs/technical-deployment-light.png'});
     await page.evaluate(() => document.documentElement.dataset.theme = 'dark');
     await page.screenshot({path:'outputs/technical-deployment-dark.png'});
     await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; document.querySelector('.work-item-kanban').scrollLeft = 0; });
     assert.equal(await page.locator('.kanban-card .status-pill-menu').count(), 0);
+    await page.locator('.kanban-card .work-item-menu > summary').first().click({trial:true});
     await page.locator('.kanban-card .work-item-menu > summary').first().click();
     await page.locator('[data-action="move-work-item"]').first().click();
     assert.equal(await page.getByLabel(/^Etapa/).count(), 1);

@@ -2221,6 +2221,26 @@ function kanbanAssigneeKey(item) {
   return item.assigneeId ? `id:${item.assigneeId}` : item.assignee?.trim() ? `name:${item.assignee.trim()}` : 'unassigned';
 }
 
+const collapsedKanbanPreferences = new Map();
+
+function collapsedKanbanKey(project) {
+  return `projects:collapsedKanban:${appBasePath}:${authState.user?.id || "anonymous"}:${project.id}`;
+}
+
+function getCollapsedKanbanColumns(project) {
+  const key = collapsedKanbanKey(project);
+  if (!collapsedKanbanPreferences.has(key)) {
+    let saved = [];
+    try { saved = JSON.parse(localStorage.getItem(key) || "[]"); } catch {}
+    collapsedKanbanPreferences.set(key, new Set(Array.isArray(saved) ? saved.filter(id => typeof id === "string") : []));
+  }
+  return collapsedKanbanPreferences.get(key);
+}
+
+function saveCollapsedKanbanColumns(project, columns) {
+  try { localStorage.setItem(collapsedKanbanKey(project), JSON.stringify([...columns])); } catch {}
+}
+
 function renderWorkItemKanban(container, visible, allItems, project, state) {
   const bugOnly = state.workItemFilter === 'bug';
   const requirementOnly = state.workItemFilter === 'requirement';
@@ -2281,6 +2301,66 @@ function renderWorkItemKanban(container, visible, allItems, project, state) {
         </div>`
       : `<button type="button" class="kanban-archived-trigger" data-action="toggle-archived-lists">Listas arquivadas (${archivedColumns.length})</button>`)
     : "");
+  const collapsedColumns = getCollapsedKanbanColumns(project);
+  const toolbar = container.closest('.work-items-panel')?.querySelector('.kanban-toolbar');
+  toolbar?.querySelector('[data-action="expand-all-columns"]')?.remove();
+  const expandAll = document.createElement('button');
+  expandAll.type = 'button';
+  expandAll.className = 'secondary-action kanban-expand-all';
+  expandAll.dataset.action = 'expand-all-columns';
+  expandAll.textContent = 'Expandir todas';
+  toolbar?.append(expandAll);
+
+  function applyCollapsedColumns() {
+    container.querySelectorAll('.kanban-column').forEach(column => {
+      const collapsed = collapsedColumns.has(column.dataset.kanbanStage);
+      column.classList.toggle('is-collapsed', collapsed);
+      column.querySelector('.kanban-column-body').hidden = collapsed;
+      column.querySelector('.kanban-owner-filter').hidden = collapsed;
+      column.querySelector('.kanban-column-head').hidden = collapsed;
+      column.querySelector('[data-action="expand-column"]').hidden = !collapsed;
+    });
+    expandAll.disabled = !container.querySelector('.kanban-column.is-collapsed');
+  }
+
+  container.querySelectorAll('.kanban-column').forEach(column => {
+    const head = column.querySelector('.kanban-column-head');
+    const title = head.querySelector('h4').textContent;
+    const count = head.querySelector('span').textContent;
+    const collapse = document.createElement('button');
+    collapse.type = 'button';
+    collapse.className = 'kanban-collapse-toggle';
+    collapse.dataset.action = 'collapse-column';
+    collapse.textContent = '‹';
+    collapse.title = `Recolher lista ${title}`;
+    collapse.setAttribute('aria-label', collapse.title);
+    collapse.setAttribute('aria-expanded', 'true');
+    head.append(collapse);
+    const expand = document.createElement('button');
+    expand.type = 'button';
+    expand.className = 'kanban-collapsed-strip';
+    expand.dataset.action = 'expand-column';
+    expand.setAttribute('aria-label', `Expandir lista ${title}: ${count} atividades`);
+    expand.setAttribute('aria-expanded', 'false');
+    expand.innerHTML = `<span aria-hidden="true">›</span><span class="kanban-collapsed-count">${escapeHtml(count)}</span><span class="kanban-collapsed-title">${escapeHtml(title)}</span>`;
+    column.querySelector('.kanban-column-toolbar').append(expand);
+    for (const [button, collapsed] of [[collapse, true], [expand, false]]) {
+      button.addEventListener('click', () => {
+        if (collapsed) collapsedColumns.add(column.dataset.kanbanStage);
+        else collapsedColumns.delete(column.dataset.kanbanStage);
+        saveCollapsedKanbanColumns(project, collapsedColumns);
+        applyCollapsedColumns();
+        (collapsed ? expand : collapse).focus({preventScroll:true});
+      });
+    }
+  });
+  expandAll.addEventListener('click', () => {
+    collapsedColumns.clear();
+    saveCollapsedKanbanColumns(project, collapsedColumns);
+    applyCollapsedColumns();
+    container.querySelector('[data-action="collapse-column"]')?.focus({preventScroll:true});
+  });
+  applyCollapsedColumns();
   container.querySelectorAll('[data-column-owner]').forEach(select => select.addEventListener('change', () => {
     const left = container.scrollLeft;
     const top = container.scrollTop;
