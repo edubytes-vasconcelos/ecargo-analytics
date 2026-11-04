@@ -1863,6 +1863,7 @@ function renderWorkItems(root, project) {
   const archivedItems = allItems.filter((item) => item.archived);
   const state = projectUiState.get(project.id);
   state.workItemFilter ||= "all";
+  state.workItemFilters ||= Object.hasOwn(workItemTypes, state.workItemFilter) ? [state.workItemFilter] : [];
   state.workItemView ||= getStoredWorkItemView();
   const requirements = activeItems.filter((item) => item.type === "requirement");
   const definitions = activeItems.filter((item) => item.type === "technical-definition");
@@ -1879,7 +1880,6 @@ function renderWorkItems(root, project) {
   summary.querySelectorAll("[data-attention]").forEach((button) => button.addEventListener("click", () => {
     if (["mine", "mentions"].includes(button.dataset.attention) && !managementIdentity()) { alert("Este filtro estará disponível quando houver identificação dos usuários."); return; }
     state.attentionFilter = state.attentionFilter === button.dataset.attention ? null : button.dataset.attention;
-    state.workItemFilter = "all";
     renderProjectDetail(project);
   }));
   if (state.attentionFilter) summary.insertAdjacentHTML("beforeend", '<button type="button" data-clear-attention>Limpar filtro de atenção</button>');
@@ -1919,10 +1919,25 @@ function renderWorkItems(root, project) {
   const filters = root.querySelector("[data-field='workItemFilters']");
   filters.hidden = state.workItemView === "team";
   const filterOptions = [["all", "Todas"], ["requirement", "Requisitos"], ["technical-definition", "Definições"], ["bug", "Bugs"], ["archived", `Arquivadas (${archivedItems.length})`]];
-  filters.innerHTML = filterOptions.map(([value, label]) => `<button type="button" class="${state.workItemFilter === value ? "active" : ""}" data-filter="${value}">${label}</button>`).join("");
+  filters.setAttribute('aria-label', 'Tipos de atividade: selecione um ou mais');
+  filters.innerHTML = filterOptions.map(([value, label]) => {
+    const selected = ['all', 'archived'].includes(value) ? state.workItemFilter === value : state.workItemFilters.includes(value);
+    return `<button type="button" class="${selected ? "active" : ""}" data-filter="${value}" aria-pressed="${selected}">${label}</button>`;
+  }).join("");
   filters.querySelectorAll("button").forEach((button) => button.addEventListener("click", () => {
-    state.workItemFilter = button.dataset.filter;
+    const value = button.dataset.filter;
+    if (['all', 'archived'].includes(value)) {
+      state.workItemFilters = [];
+      state.workItemFilter = value;
+    } else {
+      const selected = new Set(state.workItemFilters);
+      if (selected.has(value)) selected.delete(value);
+      else selected.add(value);
+      state.workItemFilters = [...selected];
+      state.workItemFilter = selected.size === 1 ? [...selected][0] : selected.size ? 'multiple' : 'all';
+    }
     renderProjectDetail(project);
+    document.querySelector(`[data-filter="${value}"]`)?.focus({preventScroll:true});
   }));
 
   window.decorateWorkItemToolbar?.(root, project, state);
@@ -1938,7 +1953,7 @@ function renderWorkItems(root, project) {
   }
   let visible = state.workItemFilter === "archived"
     ? archivedItems
-    : activeItems.filter((item) => state.workItemFilter === "all" || item.type === state.workItemFilter);
+    : activeItems.filter((item) => !state.workItemFilters.length || state.workItemFilters.includes(item.type));
   if (state.attentionFilter) visible = visible.filter((item) => workItemMatchesAttention(item, state.attentionFilter));
   if (window.matchesWorkspaceSearch) visible = visible.filter(item => matchesWorkspaceSearch(item, state));
   const resultCount = root.querySelector('[data-field="activityResultCount"]');
@@ -2375,7 +2390,7 @@ function renderWorkItemKanban(container, visible, allItems, project, state) {
   }));
   bindWorkItemActions(container, allItems, project);
   container.querySelectorAll("[data-action='kanban-add']").forEach((button) => button.addEventListener("click", () => {
-    const preferredType = ["requirement", "technical-definition", "bug"].includes(filterForProject(project)) ? filterForProject(project) : "requirement";
+    const preferredType = projectUiState.get(project.id)?.workItemFilters?.[0] || "requirement";
     openWorkItemEditor(project, null, button.dataset.stage, preferredType);
   }));
   enableKanbanDragging(container, allItems, project);

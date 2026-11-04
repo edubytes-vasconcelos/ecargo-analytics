@@ -107,3 +107,9 @@ Reabrir ou criar um bug pendente em um artefato agendado ou implantado devolve o
 Use o botão **Recolher lista** no cabeçalho para reduzir a lista a uma faixa vertical com seu nome e a quantidade de cartões. Clique na faixa para expandir novamente ou use **Expandir todas** na barra do quadro.
 
 A preferência fica salva neste navegador por usuário e projeto. Recolher uma lista não altera suas atividades, seus filtros nem a visualização dos outros usuários. Os botões também funcionam com Enter e Espaço.
+
+### Combinar tipos de atividade
+
+Os filtros **Requisitos**, **Definições** e **Bugs** podem ser combinados: clique nos tipos desejados, por exemplo **Definições + Bugs**, para exibir atividades de ambos. Clique novamente em um tipo para removê-lo da seleção. **Todas** limpa a seleção; ao desmarcar o último tipo, todas as atividades ativas voltam a aparecer. **Arquivadas** é uma visualização separada.
+
+A combinação funciona em Lista, Por etapa e Kanban, junto com a busca e o filtro de responsável. Quando somente Bugs ou Requisitos estão selecionados, o Kanban mantém as etapas específicas desse tipo.

@@ -457,6 +457,31 @@ const fs = require('node:fs');
     await page.waitForFunction(() => projectsCache[0].workItems.find(item=>item.id===bugWorkflowCheck.bugId).status === 'closed');
     assert.equal(await page.locator('[data-kanban-stage="closed"] .kanban-card').count(), 1);
     await page.screenshot({path:'outputs/bug-kanban-lifecycle.png'});
+    await page.locator('.kanban-toolbar [data-filter="technical-definition"]').click();
+    for (const type of ['bug', 'technical-definition']) {
+      assert.equal(await page.locator(`.kanban-toolbar [data-filter="${type}"]`).getAttribute('aria-pressed'), 'true');
+      assert(await page.locator(`.kanban-card.type-${type}`).count() > 0);
+    }
+    assert.equal(await page.locator('.kanban-card.type-requirement').count(), 0);
+    assert.equal(await page.locator('.kanban-toolbar [data-filter="all"]').getAttribute('aria-pressed'), 'false');
+    await page.screenshot({path:'outputs/combined-activity-filters-light.png'});
+    await page.evaluate(() => document.documentElement.dataset.theme = 'dark');
+    await page.screenshot({path:'outputs/combined-activity-filters-dark.png'});
+    await page.evaluate(() => document.documentElement.dataset.theme = 'light');
+    await page.locator('[data-view="list"]').click();
+    assert(await page.locator('.work-item-row.type-bug').count() > 0);
+    assert(await page.locator('.work-item-row.type-technical-definition').count() > 0);
+    assert.equal(await page.locator('.work-item-row.type-requirement').count(), 0);
+    await page.locator('[data-view="status"]').click();
+    assert.equal(await page.locator('.work-item-row.type-requirement').count(), 0);
+    await page.locator('[data-view="kanban"]').click();
+    await page.locator('.kanban-toolbar [data-filter="bug"]').click();
+    assert.equal(await page.locator('.kanban-card.type-bug').count(), 0);
+    assert(await page.locator('.kanban-card.type-technical-definition').count() > 0);
+    await page.locator('.kanban-toolbar [data-filter="technical-definition"]').click();
+    assert.equal(await page.locator('.kanban-toolbar [data-filter="all"]').getAttribute('aria-pressed'), 'true');
+    assert(await page.locator('.kanban-card.type-requirement').count() > 0);
+
     await page.locator('.kanban-sidebar-toggle').click();
     await page.locator('.kanban-toolbar [data-filter="all"]').click();
     await page.setViewportSize({width:1920,height:1080});
